@@ -94,6 +94,8 @@ SpringMVC 框架有它自己的配置文件，该配置文件的名字默认为�
 2. FreeMarker视图解析器：FreeMarkerViewResolver
 3. Velocity视图解析器：VelocityViewResolver
 
+**如果在 web.xml 文件中没有指定 init-param，它会自动去加载一个默认配置文件（如上面的配置），即默认找 /WEB-INF/springmvc-servlet.xml 配置文件**
+
 - 第三步：提供视图
 
 在 WEB-INF 目录下新建 templates 目录（由 springmvc-servlet 文件中配置的前缀决定），在 templates 目录中新建html文件，例如：[first.html](./Demo1-First/src/main/webapp/WEB-INF/templates/first.html)
@@ -102,6 +104,261 @@ SpringMVC 框架有它自己的配置文件，该配置文件的名字默认为�
 
 给 [Controller](./Demo1-First/src/main/java/com/cell/myFirstSpringMVC/controller/FirstController.java) 添加 @Controller 注解，在方法上添加 @RequestMapping(value="template文件名")，
 DispatcherServlet 获取到请求路径后根据注解找到对应的方法，从方法中获取逻辑视图的名（例如：first），然后拼接前缀与后缀（springmvc-servlet文件中配置的）得到物理视图名称（例如：/WEB-INF/templates/first.html），然后让视图解析器解析这个文件
+
+****
+# 二. @RequestMapping
+
+`@RequestMapping` 注解是 Spring MVC 框架中的一个控制器映射注解，用于将请求映射到相应的处理方法上。具体来说，它可以将指定 URL 的请求绑定到一个特定的方法或类上（只能在方法或类上），从而实现对请求的处理和响应
+
+## 1. 类与方法上的结合使用
+
+在同一个 webapp 中，RequestMapping 必须具有唯一性，如果相同则会报错，有两种解决方案：
+
+- 第一种：将方法上 RequestMapping 的映射路径修改为不一样的
+
+```java
+@RequestMapping("/user/detail")
+public String toDetail(){
+    return "/user/detail";
+}
+
+@RequestMapping("/product/detail")
+public String toDetail(){
+    return "/product/detail";
+}
+```
+
+- 第二种：在类上和方法上都使用 RequestMapping 注解来进行路径的映射，类上映射的就是所有方法的前缀路径，例如在类上映射的路径是"/a"，在方法上映射的路径是"/b"，那么整体表示映射的路径就是："/a/b"
+
+```java
+@Controller
+@RequestMapping("/user")
+public class UserController {
+    @RequestMapping("/detail")
+    public String toDetail(){
+        return "/user/detail";
+    }
+}
+
+@Controller
+@RequestMapping("/product")
+public class ProductController {
+    @RequestMapping("/detail")
+    public String toDetail(){
+        return "/product/detail";
+    }
+}
+```
+
+****
+## 2. @RequestMapping 的 value 属性
+
+基本作用：value 属性用于指定当前方法或类所处理的请求路径 URL
+
+### 2.1 提供多个路径
+
+value 是一个 `String[]` 类型，所以它可以填写多个请求路径
+
+```java
+@Controller
+public class LoginController {
+    // 用户访问 /login 或 /signin 时，都会进入 loginPage() 方法
+    @RequestMapping({"/login", "/signin"})
+    public String loginPage() {
+        System.out.println("登录页面访问");
+        return "login";
+    }
+}
+```
+
+****
+### 2.2 Ant 风格的 value
+
+value 属性除了可以直接写 URL 路径，还支持 Ant 风格路径匹配（模糊匹配），用于匹配复杂或不确定的请求路径，通配符包括：
+
+- ?：代表任意一个字符
+- *：代表0到N个任意字符
+- **：代表0到N个任意字符，并且路径中可以出现路径分隔符 /
+
+1、`?` 匹配单个字符
+
+```java
+@RequestMapping("/user?") // 可以匹配 /user1、/userA、/userX 等，不能匹配 /user12，每一个 ? 匹配一个字符，只能匹配一个字符的位置
+@RequestMapping("/us?er") // 可以匹配 /us1er、/usAer....
+```
+
+2、 `*` 匹配任意字符（不含 /）
+
+```java
+@RequestMapping("/user/*") // 匹配 /user/abc、/user/123，但不匹配 /user/abc/def
+@RequestMapping("/us*er") // 匹配 /usabcer、/us123er
+```
+
+3、`**` 匹配任意层路径（包括 /）
+
+`**` 必须作为路径的独立一段使用，左右不能跟其它字符拼接使用
+
+```java
+@RequestMapping("/user/**") // 匹配 /user/abc、/user/abc/def、/user/a/b/c
+@RequestMapping("/**/end") // 匹配以 /end 结尾的多层路径
+@RequestMapping("/**") // 匹配所有请求路径（可作为拦截器或异常处理路径）
+
+@RequestMapping("/abc**def") // 错误，不能这样使用
+```
+
+****
+### 2.3 value 中的占位符
+
+到目前为止，常用的请求路径是这样的格式：uri?name1=value1&name2=value2&name3=value3，
+除了这种方式，还有另外一种格式的请求路径，格式为：uri/value1/value2/value3，这样的请求路径叫做 RESTful 风格的请求路径，例如：
+
+```text
+普通的请求路径：http://localhost:8080/springmvc/login?username=admin&password=123&age=20
+RESTful 风格的请求路径：http://localhost:8080/springmvc/login/admin/123/20
+```
+
+想要使用这种方式可以在 value 属性中使用占位符（@PathVariable("xxx")， xxx 就是占位符名称，必须和 {} 中保持一致）
+
+```java
+@RequestMapping("/product/{id}")
+public String show(@PathVariable String id) { ... } // 参数名与占位符名称相同，可以省略注解中的 "xxx"
+
+@RequestMapping(value="/testRESTful/{id}/{username}/{age}")
+public String testRESTful(
+        @PathVariable("id")
+        int id,
+        @PathVariable("username")
+        String username,
+        @PathVariable("age")
+        int age){
+    System.out.println(id + "," + username + "," + age);
+    return "testRESTful";
+}
+```
+
+注意：
+
+- @PathVariable 只能用于匹配 value 中 {} 的部分，不能匹配 * 或 ?
+- 占位符不能与 Ant 风格混用（如 /user/{id}*.html 是非法的）
+- {} 中不能使用正则表达式限制（SpringMVC 不支持，但 SpringBoot 中可通过正则匹配）
+
+****
+### 2.4 method 属性
+
+method 属性用于限定 HTTP 请求的方式，比如 GET、POST、PUT、DELETE 等，根据不同的请求方式，即使路径相同也会进入不同的方法：
+
+```java
+@RequestMapping(value = "/hello", method = RequestMethod.GET)
+public String helloGet() {
+    return "helloGet";
+}
+
+@RequestMapping(value = "/hello", method = RequestMethod.POST)
+public String helloPost() {
+    return "helloPost";
+}
+```
+
+可以使用数组的形式指定多个请求方式：
+
+```java
+@RequestMapping(value = "/multi", method = {RequestMethod.GET, RequestMethod.POST})
+public String handleBoth() {
+    return "handleBoth";
+}
+```
+
+也可也使用注解的方式简化：
+
+| 注解               | 等价方式                               |
+| ---------------- | ---------------------------------- |
+| `@GetMapping`    | `@RequestMapping(method = GET)`    |
+| `@PostMapping`   | `@RequestMapping(method = POST)`   |
+| `@PutMapping`    | `@RequestMapping(method = PUT)`    |
+| `@DeleteMapping` | `@RequestMapping(method = DELETE)` |
+| `@PatchMapping`  | `@RequestMapping(method = PATCH)`  |
+
+
+```java
+@GetMapping("/info")
+public String getInfo() {
+    return "info";
+}
+
+@PostMapping("/submit")
+public String submit() {
+    return "submitted";
+}
+```
+
+****
+### 2.5 web 的请求方式
+
+- **GET：获取资源，只允许读取数据，不影响数据的状态和功能。使用 URL 中传递参数或者在 HTTP 请求的头部使用参数，服务器返回请求的资源。**
+- **POST：向服务器提交资源，可能还会改变数据的状态和功能。通过表单等方式提交请求体，服务器接收请求体后，进行数据处理。**
+- **PUT：更新资源，用于更新指定的资源上所有可编辑内容。通过请求体发送需要被更新的全部内容，服务器接收数据后，将被更新的资源进行替换或修改。**
+- **DELETE：删除资源，用于删除指定的资源。将要被删除的资源标识符放在 URL 中或请求体中。**
+- **HEAD：请求服务器返回资源的头部，与 GET 命令类似，但是所有返回的信息都是头部信息，不能包含数据体。主要用于资源检测和缓存控制。**
+- PATCH：部分更改请求。当被请求的资源是可被更改的资源时，请求服务器对该资源进行部分更新，即每次更新一部分。
+- OPTIONS：请求获得服务器支持的请求方法类型，以及支持的请求头标志。“OPTIONS *”则返回支持全部方法类型的服务器标志。
+- TRACE：服务器响应输出客户端的 HTTP 请求，主要用于调试和测试。
+- CONNECT：建立网络连接，通常用于加密 SSL/TLS 连接。
+
+注意：
+
+1. 使用超链接以及原生的form表单只能提交get和post请求
+2. 使用超链接发送的是get请求
+3. 使用form表单，如果没有设置method，发送get请求
+4. 使用form表单，设置method="get"，发送get请求
+5. 使用form表单，设置method="post"，发送post请求
+6. **使用form表单，设置method="put/delete/head"，发送get请求**
+
+****
+### 2.6 params 属性
+
+params 属性用于限定请求参数条件，只有在请求中包含指定的参数或满足某些规则时，SpringMVC 才会将请求映射到对应的方法
+
+```java
+// 请求中必须包含 username 参数，否则不会匹配到这个方法，并且一般前端页面会报 400 错误
+@RequestMapping(value = "/test", params = "username")
+```
+
+四种用法：
+
+- @RequestMapping(value="/login", params={"username", "password"}) 表示：请求参数中必须包含 username 和 password，才能与当前标注的方法进行映射
+- @RequestMapping(value="/login", params={"!username", "password"}) 表示：请求参数中不能包含username参数，但必须包含password参数，才能与当前标注的方法进行映射
+- @RequestMapping(value="/login", params={"username=admin", "password"}) 表示：请求参数中必须包含username参数，并且参数的值必须是admin，另外也必须包含password参数，才能与当前标注的方法进行映射
+- @RequestMapping(value="/login", params={"username!=admin", "password"}) 表示：请求参数中必须包含username参数，但参数的值不能是admin，另外也必须包含password参数，才能与当前标注的方法进行映射
+
+****
+### 2.7 headers 属性
+
+headers 属性用于根据请求头（Header）信息限制请求的映射规则，只有当请求中包含符合指定规则的请求头时，方法才会被调用，例如：
+
+```java
+// 只有包含请求头 Content-Type: application/json 的请求才能访问
+@RequestMapping(value = "/headerTest", headers = "Content-Type=application/json")
+public String jsonOnly() {
+}
+
+// 请求头中必须包含 X-Token 请求头
+@RequestMapping(value = "/headerTest", headers = "X-Token")
+public String tokenPresent() {
+}
+
+// 请求头中不能包含 X-Debug 请求头
+@RequestMapping(value = "/headerTest", headers = "!X-Debug")
+public String noDebugHeader() {
+}
+
+// 请求头中 Accept 不能是 text/html
+@RequestMapping(value = "/headerTest", headers = "Accept!=text/html")
+public String notHtml() {
+}
+```
+
+****
+
 
 
 

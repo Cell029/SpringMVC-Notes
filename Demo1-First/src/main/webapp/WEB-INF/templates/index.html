@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+
+<html lang="en" xmlns:th="http://www.thymeleaf.org" xmlns="http://www.w3.org/1999/html">
+<head>
+    <meta charset="UTF-8">
+    <title>first springmvc</title>
+</head>
+<body>
+<h1>首页</h1>
+
+<a th:href="@{/test}">test 请求</a>
+<br>
+<a th:href="@{/other}">other 请求</a>
+<br>
+<!--测试RequestMapping的params属性-->
+<a th:href="@{/user/testParams(username='admin',password='123')}">测试params属性</a>
+
+<!--发送 POST 请求-->
+<form th:action="@{/user/login}" method="post">
+    用户名：<input type="text" name="username"/>
+    <br>
+    密码：<input type="password" name="password"/>
+    <br>
+    <input type="submit" value="登录"/>
+</form>
+</body>
+</html>

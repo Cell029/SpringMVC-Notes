@@ -11,5 +11,11 @@ th 不是固定的，可以指定其它的命名空间，只不过大部分情�
 </head>
 <body>
 <h1>第一个 Spring MVC 程序</h1>
+<!--
+th: 表示后面的代码可以编写Thymeleaf语法，可以被Thymeleaf语法解析。Thymeleaf检测到以 / 开始，表示绝对路径，自动会将webapp的上下文路径加上去，
+最终的效果是：href="/springmvc/other"
+-->
+<a th:href="@{/other}">other请求</a>
 </body>
 </html>
+

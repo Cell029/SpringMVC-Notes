@@ -8,6 +8,14 @@
     <servlet>
         <servlet-name>springmvc</servlet-name>
         <servlet-class>org.springframework.web.servlet.DispatcherServlet</servlet-class>
+        <!--手动设置springmvc配置文件的路径及名字，SpringMVC 会从类路径下去找 springmvc.xml，不再去默认位置 /WEB-INF/springmvc-servlet.xml 查找-->
+        <init-param>
+            <param-name>contextConfigLocation</param-name>
+            <!--指定了Spring MVC配置文件的名字是：springmvc.xml，存放路径是类的根路径-->
+            <param-value>classpath:springmvc.xml</param-value>
+        </init-param>
+        <!--为了提高用户的第一次访问效率，建议在web服务器启动时初始化前端控制器-->
+        <load-on-startup>1</load-on-startup>
     </servlet>
     <servlet-mapping>
         <servlet-name>springmvc</servlet-name>
