@@ -358,8 +358,133 @@ public String notHtml() {
 ```
 
 ****
+# 三. 获取请求提交数据
 
+## 1. 使用原始的 servlet 获取
 
+使用这种方法可以获取到表单提交的数据，但是较为麻烦，必须依赖原始 servlet 的 HttpServletRequest 和 HttpServletResponse
 
+```java
+@PostMapping(value="/registerServlet")
+public String registerServlet(HttpServletRequest request){
+    // 通过当前请求对象获取提交的数据
+    String username = request.getParameter("username");
+    String password = request.getParameter("password");
+    String sex = request.getParameter("sex");
+    String[] hobbies = request.getParameterValues("hobby");
+    String intro = request.getParameter("intro");
+    System.out.println(username + "," + password + "," + sex + "," + Arrays.toString(hobbies) + "," + intro);
+    return "success";
+}
+```
+
+****
+## 2. 使用 RequestParam注解
+
+将请求参数与方法上的形参映射，获取 GET 请求 URL 中的查询字符串或 POST 表单提交时的表单字段
+
+```text
+http://localhost:8080/user/login?username=Tom&password=123
+
+<form action="/user/login" method="post">
+  <input type="text" name="username">
+  <input type="password" name="password">
+</form>
+```
+
+基本用法：
+
+```java
+@PostMapping(value = "/registerParam")
+public String register(
+        @RequestParam(value="username")
+        String username,
+        @RequestParam(value="password")
+        String password,
+        @RequestParam(value="sex")
+        String sex,
+        @RequestParam(value="hobby")
+        String[] hobby,
+        @RequestParam(name="intro")
+        String intro) {
+    System.out.println(username);
+    System.out.println(password);
+    System.out.println(sex);
+    System.out.println(Arrays.toString(hobby));
+    System.out.println(intro);
+    return "success";
+}
+```
+
+常用参数：
+
+- value 或 name：指定请求参数的名称，必须与表单或 URL 中参数名对应
+- required：是否是必须传递的参数，默认值为 true，不传会报错
+- defaultValue：指定默认值，传参为空或缺失时使用该值（设置后 required 自动为 false）
+
+1、参数名一致时，可省略 value
+
+```java
+@GetMapping("/query")
+public String query(@RequestParam String keyword) {
+    return "...";
+}
+
+// 等同于
+@GetMapping("/query")
+public String query(@RequestParam("keyword") String keyword)
+```
+
+2、设置默认值
+
+当浏览器访问 /search?page=2，参数为 2；如果访问 /search，参数自动使用默认值 1
+
+```java
+@GetMapping("/search")
+public String search(@RequestParam(value = "page", defaultValue = "1") int page) {
+    System.out.println("当前页：" + page);
+    return "search";
+}
+```
+
+3、非必传参数
+
+如果访问 /user?id=100，输出 100；如果访问 /user，不会报错，id == null
+
+```java
+@GetMapping("/user")
+public String getUser(@RequestParam(value = "id", required = false) Integer id) {
+    System.out.println("用户ID：" + id);
+    return "userInfo";
+}
+```
+
+****
+## 3. 使用 pojo 类接收请求参数
+
+当前端发送的是表单数据,SpringMVC 会自动将表单字段与 POJO 中同名属性进行匹配，调用其 setter 方法进行赋值,所以前端表单字段要与 POJO 类的字段一致（实际上是 setter 方法名一致）
+
+如果是嵌套对象的话，就需要修改一下前端表单的写法，例如：
+
+```java
+@PostMapping("/register")
+public String register(User user) {
+    System.out.println("用户名: " + user.getUsername());
+    System.out.println("城市: " + user.getAddress().getCity());
+    System.out.println("街道: " + user.getAddress().getStreet());
+    return "success";
+}
+```
+
+```html
+<form action="/register" method="post">
+    用户名：<input type="text" name="username"><br>
+    城市：<input type="text" name="address.city"><br>
+    街道：<input type="text" name="address.street"><br>
+    <input type="submit" value="提交">
+</form>
+```
+
+****
 
 
