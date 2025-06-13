@@ -556,6 +556,25 @@ POST 表单提交时，参数通过请求体（body）传输，若服务端未�
 
 - 在 DispatcherServlet 执行前通过过滤器解决乱码问题，而 SpringMVC 内置了这种过滤器，通过 web.xml 文件配置即可
 
+```java
+// isForceRequestEncoding 和 isForceResponseEncoding 初始值为 false，
+// 通过 xml 文件将这两个值设为 true 就可以在 DispatcherServlet 执行前指定编码格式
+protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain) throws ServletException, IOException {
+    String encoding = this.getEncoding();
+    if (encoding != null) {
+        if (this.isForceRequestEncoding() || request.getCharacterEncoding() == null) {
+            request.setCharacterEncoding(encoding);
+        }
+
+        if (this.isForceResponseEncoding()) {
+            response.setCharacterEncoding(encoding);
+        }
+    }
+
+    filterChain.doFilter(request, response);
+}
+```
+
 ```xml
 <!--字符编码过滤器-->
 <filter>
@@ -583,7 +602,312 @@ POST 表单提交时，参数通过请求体（body）传输，若服务端未�
 </filter-mapping>
 ```
 
+****
+# 四. Servlet 中的三个域对象
 
+- 请求域：request
+- 会话域：session
+- 应用域：application
 
+三个域都有以下三个方法，主要是通过 setAttribute + getAttribute 方法来完成在域中数据的传递和共享：
 
+```java
+// 向域中存储数据
+void setAttribute(String name, Object obj);
 
+// 从域中读取数据
+Object getAttribute(String name);
+
+// 删除域中的数据
+void removeAttribute(String name);
+```
+
+## 1. request 域对象
+
+request 域对象就是指当前 HTTP 请求的作用范围内的数据容器，本质是一个接口：`javax.servlet.http.HttpServletRequest`，request 对象代表了一次请求，一次请求一个 request。
+使用请求域的业务场景：在A资源中通过转发的方式跳转到B资源，因为是转发，所以从A到B就是一次请求，如果想让A资源和B资源共享同一个数据，可以将数据存储到 request 域中
+
+- SpringMVC 中 request 域共享数据有以下几种方式：
+
+1. 使用原生Servlet API方式
+2. 使用Model接口
+3. 使用Map接口
+4. 使用ModelMap类
+5. 使用ModelAndView类
+
+这些数据的生命周期仅存在于一次 HTTP 请求的过程中，也就是说仅在:控制器 -> 视图页面之间传递数据与请求转发（forward）之间共享数据，不适用于重定向（redirect，服务器或客户端在接收到请求后，不直接返回目标内容，而是告诉浏览器去访问另一个URL）
+
+### 1.1 使用原生 Servlet API 方式
+
+在 Controller 的方法上使用 HttpServletRequest：
+
+```java
+@RequestMapping("/testServletAPI")
+public String testServletAPI(HttpServletRequest request){
+    // 向request域中存储数据
+    request.setAttribute("testRequestScope", "在SpringMVC中使用原生Servlet API实现request域数据共享");
+    return "viewServlet";
+}
+```
+
+****
+### 1.2 使用 Model 接口
+
+Model 接口是用于向请求域中传递数据的核心接口，它是控制器方法与视图之间进行数据交互的桥梁，用于封装控制器处理结果中需要传递给视图的数据（本质上是对 HttpServletRequest.setAttribute() 方法的封装），
+更容易做单元测试（不依赖 Tomcat）
+
+```java
+@RequestMapping("/testModel")
+public String testModel(Model model){
+    // 向request域中存储数据
+    model.addAttribute("testRequestScope", "在SpringMVC中使用Model接口实现request域数据共享");
+    // 等价于
+    // request.setAttribute("testRequestScope", "在SpringMVC中使用Model接口实现request域数据共享");
+    return "view";
+}
+```
+
+****
+### 1.3 使用 Map 接口
+
+SpringMVC 的核心类 ModelAndViewContainer 会收集控制器中的模型数据，无论用的是 Model、ModelMap 还是 Map，它都会将数据统一合并，最后写入 request 域中，
+但 Map 的方式不具备一些常用的 API 且可读性较差，不推荐使用
+
+```java
+// 控制器执行后，DispatcherServlet 最终将这些数据存入 request 域
+request.setAttribute("msg", "通过 Map 向 request 域传值");
+```
+
+```java
+@RequestMapping("/testMap")
+public String testMap(Map<String, Object> map){
+    // 向request域中存储数据
+    map.put("testRequestScope", "在SpringMVC中使用Map接口实现request域数据共享");
+    return "view";
+}
+```
+
+****
+### 1.4 使用 ModelMap 类
+
+ModelMap 是 SpringMVC 提供的一个用于封装模型数据的类，实质上是一个继承自 LinkedHashMap 的类，它具有 Map 的特性可以连续添加多个属性，也拥有 Model 的可读性，
+底层数据最终也会写入 request 域
+
+```java
+modelMap.addAttribute("a", 1)
+        .addAttribute("b", 2)
+        .addAttribute("c", 3);
+```
+
+```java
+@RequestMapping("/testModelMap")
+public String testModelMap(ModelMap modelMap){
+    // 向request域中存储数据
+    modelMap.addAttribute("testRequestScope", "在SpringMVC中使用ModelMap实现request域数据共享");
+    return "view";
+}
+```
+
+这三种方式最后实例化的对象都是同一个：org.springframework.validation.support.BindingAwareModelMap
+
+****
+### 1.5 使用 ModelAndView 类
+
+在 SpringMVC 框架中为了更好的体现MVC架构模式，底层提供了一个 ModelAndView 类，它封装了 Model 和 View，也就是说这个类既封装业务处理之后的数据，也体现了跳转到哪个视图。
+SpringMVC 执行流程中会自动从 ModelAndView 拆出视图名和数据，然后把模型数据存入 request 域并根据视图名解析为实际页面
+
+- ModelAndView 的三种常见写法：
+
+1. 构造函数传参
+
+```java
+@RequestMapping("/mv1")
+public ModelAndView mv1() {
+    // 视图名：user；传入“key = username，value = 张三”
+    return new ModelAndView("user", "username", "张三"); 
+}
+```
+
+2. 连续调用写法
+
+```java
+@RequestMapping("/mv2")
+public ModelAndView mv2() {
+    ModelAndView mav = new ModelAndView("user");
+    mav.addObject("username", "李四");
+    mav.addObject("age", 22);
+    return mav;
+}
+```
+
+3. 使用 ModelMap 或 Map 配合视图名返回
+
+```java
+@RequestMapping("/mv3")
+public ModelAndView mv3() {
+    Map<String, Object> map = new HashMap<>();
+    map.put("username", "王五");
+    map.put("gender", "男");
+    return new ModelAndView("user", map);
+}
+```
+
+- 使用 ModelAndView 需要注意：
+
+1. 方法的返回值类型不是String，而是ModelAndView对象
+2. ModelAndView不是出现在方法的参数位置，而是在方法体中new的
+3. 需要调用addObject向域中存储数据
+4. 传参时没指定视图名就需要调用setViewName设置视图的名字
+
+```java
+@RequestMapping("/testModelAndView")
+public ModelAndView testModelAndView(){
+    // 创建“模型与视图对象”
+    ModelAndView modelAndView = new ModelAndView();
+    // 绑定数据
+    modelAndView.addObject("testRequestScope", "在SpringMVC中使用ModelAndView实现request域数据共享");
+    // 绑定视图
+    modelAndView.setViewName("view");
+    // 返回
+    return modelAndView;
+}
+```
+
+> 在 Spring MVC 中，无论控制器方法返回的是逻辑视图名（String）、模型数据（Model/Map/ModelMap），还是显式的 ModelAndView，
+> 最终框架都会将它们封装为 ModelAndView 对象，由 DispatcherServlet 的核心方法 doDispatch() 进行调度处理，
+> 经过视图解析器解析为 View 对象后，调用它的 render() 方法与 Model 对象结合
+
+```java
+// 调用 Controller 中对应的方法，然后封装成 ModelAndView
+ModelAndView mv = handlerAdapter.handle(request, response, handler);
+// 将逻辑视图转换成对应的 View 对象
+View view = viewResolver.resolveViewName(mv.getViewName(), locale);
+// 将数据和视图组合，生成响应
+view.render(mv.getModel(), request, response);
+```
+
+```text
+用户发起请求
+      ↓
+DispatcherServlet（前端控制器）收到请求
+      ↓
+HandlerMapping → 查找对应的处理器（Controller 方法）
+      ↓
+HandlerAdapter → 执行 Controller 方法
+      ↓
+Controller 方法返回（逻辑视图名 或 ModelAndView）
+      ↓
+收集视图名 + 模型数据（BindingAwareModelMap）
+      ↓
+DispatcherServlet 接收结果 → 封装为 ModelAndView 对象
+      ↓
+ViewResolver → 将逻辑视图名解析为 View 对象
+      ↓
+View.render(model, request, response)
+      ↓
+生成 HTML 页面响应用户
+```
+
+****
+## 2. session 域对象
+
+在 Java Web（如 SpringMVC）中，HttpSession 是由服务器端创建和管理的一个会话对象，用来表示用户与服务器之间的一次会话。
+从用户打开浏览器访问网站开始，到关闭浏览器，这段时间就是一次会话（Session）：
+
+- 每一个会话对应一个 HttpSession 对象
+- 每个 HttpSession 对象都有一个唯一标识：JSESSIONID
+- JSESSIONID 默认通过浏览器中的 Cookie 存储在客户端
+- 浏览器关闭或 Session 超时后，JSESSIONID 失效，会话结束
+- Session 本质上是在服务器端开辟的一块“会话级内存空间”
+
+使用会话域的业务场景：
+
+1. 跨请求共享数据（如重定向跳转）：请求从A资源重定向（Redirect）到B资源，因为重定向会产生两个请求对象，所以无法用 request.setAttribute() 传递数据，此时可以使用 session.setAttribute() 存储数据，在B资源中通过 session.getAttribute() 读取
+2. 登录状态管理：登录成功后，将用户信息存储到 Session 中，以此判断用户是否已登录
+3. 购物车等场景：用户在多个页面添加商品，但结账时是统一提交的，这些商品信息就可以存在 session 中做统一管理
+
+- Session 生命周期：
+
+1. 会话创建：第一次通过 request.getSession() 会自动创建 HttpSession 对象
+2. 设置最大空闲时间：`session.setMaxInactiveInterval(1800);`，以秒为单位，当超过后则自动销毁
+3. 手动销毁：通过 session.invalidate() 主动销毁会话
+4. 浏览器关闭：客户端 Cookie 中 JSESSIONID 失效，服务器中 Session 难以再被访问到
+
+- 通过原生 servlet 获取：
+
+```java
+@RequestMapping("/testSessionScope1")
+public String testServletAPI(HttpSession session) {
+    // 向会话域中存储数据
+    session.setAttribute("testSessionScope1", "使用原生Servlet API实现session域共享数据");
+    return "view";
+}
+```
+
+- 使用 @SessionAttributes 注解：
+
+@SessionAttributes注解使用在Controller类上，标注了当key是 x 或者 y 时，数据将被存储到会话session中。如果没有@SessionAttributes注解，默认存储到request域中
+
+```java
+@Controller
+@SessionAttributes(value = {"x", "y"})
+public class SessionScopeTestController {
+
+    @RequestMapping("/testSessionScope2")
+    public String testSessionAttributes(ModelMap modelMap){
+        // 向session域中存储数据
+        modelMap.addAttribute("x", "我是埃克斯");
+        modelMap.addAttribute("y", "我是歪");
+
+        return "view";
+    }
+}
+```
+
+****
+## 3. application 域对象
+
+SpringMVC 中的 application 域对象，就是 ServletContext 对象，表示整个 Web 应用的上下文环境（所有用户共享），作用范围是整个服务器生命周期，通过以下方式获取:
+
+```java
+@RequestMapping("/testApplicationScope")
+public String testApplicationScope(HttpServletRequest request){
+    // 获取ServletContext对象
+    ServletContext application = request.getServletContext();
+    // 向应用域中存储数据
+    application.setAttribute("applicationScope", "应用域中的一条数据");
+    return "view";
+}
+```
+
+或者直接定义为成员变量：
+
+```java
+@Controller
+public class AppController {
+    @Autowired
+    private ServletContext application;
+
+    @GetMapping("/setGlobal")
+    public String setGlobalData() {
+        application.setAttribute("siteName", "SpringMVC学习网");
+        return "success";
+    }
+
+    @GetMapping("/getGlobal")
+    public String getGlobalData(Model model) {
+        String name = (String) application.getAttribute("siteName");
+        model.addAttribute("site", name);
+        return "display";
+    }
+}
+```
+
+****
+## 4. PageContext 域对象（SpringMVC 中没有独立的 PageContext 域对象）
+
+> PageContext 是 Java EE 中 JSP（Java Server Pages）技术特有的作用域对象，用于在 JSP 页面中访问其他域对象（如 request、session、application）和管理 JSP 中的一些信息，代表当前 JSP 页面的上下文对象
+
+因为 SpringMVC 是基于 Servlet 的控制器模型，它不依赖 JSP 页面语法，所以它内部不存在这个域对象
+
+****

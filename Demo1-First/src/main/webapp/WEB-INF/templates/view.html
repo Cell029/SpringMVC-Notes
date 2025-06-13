@@ -1,0 +1,15 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <title>view</title>
+</head>
+<body>
+<!--获取 request 域中的数据-->
+<div th:text="${testRequestScope}"></div>
+<!--获取 session 域中的数据-->
+<div th:text="${session.testSessionScope1}"></div>
+<!--获取 application 域中的数据-->
+<div th:text="${application.applicationScope}"></div>
+</body>
+</html>
