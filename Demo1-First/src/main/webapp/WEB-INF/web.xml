@@ -17,6 +17,8 @@
         <!--为了提高用户的第一次访问效率，建议在web服务器启动时初始化前端控制器-->
         <load-on-startup>1</load-on-startup>
     </servlet>
+
+
     <servlet-mapping>
         <servlet-name>springmvc</servlet-name>
         <!--

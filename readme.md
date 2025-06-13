@@ -911,3 +911,293 @@ public class AppController {
 因为 SpringMVC 是基于 Servlet 的控制器模型，它不依赖 JSP 页面语法，所以它内部不存在这个域对象
 
 ****
+# 五. 视图
+
+- Spring MVC 视图支持可配置：
+
+在 Spring MVC 中，视图 View 是支持定制的，例如在第一个程序中的 [springmvc.xml](./Demo1-First/src/main/webapp/WEB-INF/springmvc-servlet.xml) 文件中进行了相关配置，这种设计是完全符合OCP开闭原则的，视图V iew 和框架是解耦合的，耦合度低扩展能力强，视图 View 可以通过配置文件进行灵活切换
+
+## 1. Spring MVC 支持的常见视图
+
+1. InternalResourceView：内部资源视图（Spring MVC框架内置的，专门为 JSP 模板语法准备的），常用于传统的服务端渲染网页
+
+```xml
+<bean class="org.springframework.web.servlet.view.InternalResourceViewResolver">
+    <property name="prefix" value="/WEB-INF/views/" />
+    <property name="suffix" value=".jsp" />
+</bean>
+```
+
+2. RedirectView：重定向视图（Spring MVC框架内置的，用来完成重定向效果），不通过模板引擎直接跳转 URL 或页面路径
+
+```java
+// 重定向（客户端跳转）
+return "redirect:/login";
+
+// 转发（服务器内部跳转）
+return "forward:/WEB-INF/views/welcome.jsp";
+```
+
+3. ThymeleafView：Thymeleaf视图（第三方的，为 Thymeleaf 模板语法准备的）
+4. FreeMarkerView：FreeMarker视图（第三方的，为 FreeMarker 模板语法准备的）
+5. VelocityView：Velocity视图（第三方的，为 Velocity 模板语法准备的，早期广泛使用，但不再推荐）
+6. PDFView：PDF视图（第三方的，专门用来生成 pdf 文件视图）
+7. ExcelView：Excel视图（第三方的，专门用来生成 excel 文件视图）
+
+****
+## 2. 实现视图机制的核心类与接口
+
+1、DispatcherServlet类（前端控制器）：
+
+> 在整个Spring MVC执行流程中，负责中央调度，核心方法：doDispatch
+
+2、ViewResolver接口（视图解析器）：
+
+> 负责将逻辑视图名转换为物理视图名，最终创建 View 接口的实现类，即视图实现类对象，核心方法：resolveViewName
+
+3、View接口（视图）:
+
+> 负责将模型数据 Model 渲染为视图格式（HTML 代码）并输出到客户端（它负责将模板语言转换成 HTML 代码），核心方法：render
+
+4、ViewResolverRegistry（视图解析器注册器）：
+
+> 负责在web容器（Tomcat）启动的时候完成视图解析器的注册，如果有多个视图解析器，则会将视图解析器对象按照 order 的配置（越小优先级越高）放入 List 集合
+
+- 整体流程：
+
+```text
+[客户端请求] → DispatcherServlet.doDispatch()：整个流程的发起者
+                       ↓
+             HandlerAdapter.handle()
+                       ↓
+           返回 ModelAndView（视图名 + 模型数据）
+                       ↓
+         processDispatchResult() → render()
+                       ↓
+     ViewResolver.resolveViewName() → View（视图对象）
+                       ↓
+           View.render() → 输出 HTML / JSON 响应
+```
+
+```java
+public class DispatcherServlet extends FrameworkServlet {
+    // 前端控制器的核心方法，处理请求，返回视图，渲染视图，都是在这个方法中完成的
+    protected void doDispatch(HttpServletRequest request, HttpServletResponse response) throws Exception {
+        // 根据请求路径调用映射的处理器方法，处理器方法执行结束之后，返回逻辑视图名称
+        // 返回逻辑视图名称之后，DispatcherServlet 会将逻辑视图名称 viewName + Model，将其封装为 ModelAndView 对象
+        mv = ha.handle(processedRequest, response, mappedHandler.getHandler());
+
+        // 对返回的 ModelAndView 进行处理
+        processDispatchResult(processedRequest, response, mappedHandler, mv, dispatchException);
+    }
+    
+    // 这里是判断有没有异常、有没有 ModelAndView，决定是否渲染页面
+    private void processDispatchResult(HttpServletRequest request, HttpServletResponse response,
+                                       @Nullable HandlerExecutionChain mappedHandler, @Nullable ModelAndView mv,
+                                       @Nullable Exception exception) throws Exception {
+        //渲染页面（将模板字符串转换成 html 代码响应到浏览器）
+        render(mv, request, response); // 调用的是本类中的 render() 方法
+    }
+
+    // 真正进入视图解析和渲染阶段
+    protected void render(ModelAndView my, HttpServletRequest request, HttpServletResponse response) throws Exception {
+        String viewName = mv.getViewName();
+        // 这个方法的作用是将逻辑视图名称转换成物理视图名称，并且最终返回视图对象 View
+        View view = resolveViewName(viewName, mv.getModelInternal(), locale, request);
+        // 真正的将模板字符串转换成 html 代码，并将 html 响应给浏览器
+        view.render(mv.getModelInternal(), request, response);
+    }
+
+    protected View resolveViewName(String viewName, @Nullable Map<String, Object> model,
+                                   Locale locale, HttpservletRequest request) throws Exception {
+        //其实这一行代码才是真正起作用的：将逻辑视图名称转换成物理视图名称，并且最终返回视图对象 view
+        ViewResolver viewResolver; // 如果使用的是 ThymeleafViewResolver， 那么底层会创建一个 ThymeleafViewResolver 对象
+        // viewResolver 实际是一个列表（List<ViewResolver>），可能存在多个视图对象，Spring 会依次调用直到找到非 null 的 View
+        View view = viewResolver.resolveViewName(viewName, locale); // 返回的视图对象就是 ThymeleafView 对象
+        return view;
+    }
+}
+```
+
+如果想要实现自己的视图，就需要实现以下两个接口，然后重写对应的这两个方法
+
+```java
+// 负责视图解析
+public interface ViewResolver { // 如果使用Thymeleaf，那么该接口的实现类就是：ThymeleafViewResolver
+    // 这个方法就是将逻辑视图名称转换成物理视图名称，并且最终返回视图对象 view
+    View resolveViewName(String viewName, Locale locale) throws Exception;
+}
+```
+
+```java
+// 负责将模板字符串转换成 html 代码
+public interface View {
+    void render(@Nullable Map<String, ?> model,HttpServletRequest request,HttpServletResponse response) throws Exception;
+}
+```
+
+****
+## 3. 转发与重定向
+
+### 3.1 请求转发（Forward）
+
+请求转发是服务器内部的资源跳转行为，当前请求由服务器内部跳转到另一个资源处理，客户端并不知情，通常拥有以下特点：
+
+- 同一个 request 对象
+- 不改变浏览器地址栏
+- 数据可以保存在 request 域中共享
+- 页面跳转速度较快
+- 通常用于跳转到内部资源（如 JSP 页面、另一个 Controller）
+
+使用方式：
+
+1、原生 Servlet：
+
+```java
+// 跳转到 .../b 
+request.getRequestDispatcher("/b").forward(request,response);
+```
+
+2、SpringMVC 中：
+
+DispatcherServlet 类的 resolveViewName 方法中的 viewResolver 就是 InternalResourceViewResolver 的实例，viewResolver 会调用父类的 buildView 方法，
+进行路径的拼接，然后在 render 方法中执行 `RequestDispatcher rd = getRequestDispatcher(request); rd.forward(request, response);`
+
+```java
+// 返回逻辑视图名（默认是请求转发）
+@RequestMapping("/forward1")
+public String forwardTest1(Model model) {
+    model.addAttribute("msg", "请求转发示例");
+    return "success";  // 交给视图解析器，默认走 InternalResourceViewResolver，转发到 /WEB-INF/views/success.jsp
+}
+
+// 显式声明转发路径
+@RequestMapping("/forward2")
+public String forwardTest2() {
+    return "forward:/hello";
+}
+```
+
+****
+### 3.2 重定向（Redirect）
+
+重定向是由服务器指示浏览器重新发送一次请求到另一个资源，地址栏会改变并重新发出新的 HTTP 请求，通常拥有以下特点：
+
+- 两次请求，request 不共享
+- 地址栏会更新
+- 不能共享 request 域中的数据
+- 可以携带参数到下一个请求，但必须放在 URL 上
+- 通常用于：登录成功后跳转主页、避免表单重复提交
+
+使用方式：
+
+```java
+@RequestMapping("/redirect1")
+public String redirectTest1() {
+    return "redirect:/index"; // 触发浏览器重定向
+}
+
+@RequestMapping("/redirect2")
+public String redirectTest2(RedirectAttributes attrs) {
+    attrs.addAttribute("id", 123);
+    attrs.addFlashAttribute("msg", "重定向成功"); // Flash 属性，不会放进 URL，但会自动存入 session 中，临时保存
+    return "redirect:/result";
+}
+```
+
+如果要跨域就需要写上全路径：
+
+```java
+@RequestMapping("/a")
+public String a(){
+    return "redirect:http://localhost:8080/springmvc2/b";
+}
+```
+
+#### Flash Attributes（闪存属性，为重定向共享数据设计）
+
+重定向会导致 request 对象失效，`request.setAttribute()` 也就无法使用，Spring 通过 RedirectAttributes 接口提供了一种机制，可以在重定向中传递临时数据，这种数据就叫做 Flash 属性（Flash Attributes），
+Flash Attributes 是一种保存在 Session 中的临时数据，它在一次请求结束后自动生效，并在下一个请求中可用，读取一次之后立即销毁，非常适合用于一次性提示信息等
+
+```java
+// 添加闪存属性（在第一次请求中设置）
+@PostMapping("/save")
+public String save(RedirectAttributes redirectAttributes) {
+    // addFlashAttribute 放入闪存（临时）数据
+    redirectAttributes.addFlashAttribute("msg", "保存成功！");
+    return "redirect:/result"; // 重定向到下面的路径
+}
+
+// 获取闪存属性（在第二次请求中使用）
+@GetMapping("/result")
+public String resultPage(Model model) {
+    // 自动从 session 中读取并绑定到 model，读取后立即移除
+    return "result"; // 跳转到对应页面
+}
+```
+
+****
+## 4. 视图控制器（`<mvc:view-controller>`）
+
+视图控制器是 Spring MVC 中一种简单的控制器映射方式，它不需要编写任何业务逻辑，只负责将请求直接映射到某个视图（页面），适合做简单的页面跳转，可以省去写空的 Controller 类和方法，快速将请求 URL 映射到指定的视图名
+
+```xml
+<!-- 只做请求映射，跳转到视图 -->
+<mvc:view-controller path="/login" view-name="loginPage" />
+```
+
+- path：请求路径（浏览器请求 URL）
+- view-name：视图名称（对应视图解析器解析的视图，比如 JSP 文件名）
+
+当用户访问 .../login，直接返回视图名 loginPage，比如会被解析为 /WEB-INF/views/loginPage.html，不过需要注意的是，配置了这个后，所有类的 @Controller 注解都会失效，需要添加额外的标签让不让它们失效
+
+```xml
+<mvc:annotation-driven/>
+```
+
+****
+## 5. 访问静态资源
+
+静态资源指的是网站中不需要后端动态处理，直接由服务器返回给客户端的文件，如：
+
+- 图片（jpg、png、gif） 
+- CSS 样式表 
+- JavaScript 文件
+- HTML 静态页面 
+- 字体文件等
+
+Spring MVC默认会将所有请求（包括静态资源请求）都通过DispatcherServlet来处理，如果没有额外配置，访问静态资源时可能出现404错误（找不到资源）或静态资源被DispatcherServlet拦截，
+因为 DispatcherServlet 会寻找匹配的 Controller 来处理这个请求，但对应静态资源通常是不会配置 Controller 的，所以就可能导致资源无法正确返回
+
+### 5.1 使用默认 Servlet 处理静态资源
+
+这是最简单的方式，它会把静态资源请求交给服务器默认的Servlet来处理，当DispatcherServlet处理不了请求时（比如静态资源），
+它会将请求转发给Servlet容器中的默认Servlet，让容器来直接响应静态资源
+
+首先需要在springmvc.xml文件中添加以下配置，开启默认Servlet处理静态资源功能：
+
+```xml
+<!-- 开启注解驱动 -->
+<mvc:annotation-driven />
+
+<!--开启默认Servlet处理-->
+<mvc:default-servlet-handler>
+```
+
+****
+### 5.2 使用 `<mvc:resources>` 标签配置静态资源
+
+这个方式更灵活，可以指定URL路径映射到资源文件夹，在 springmvc.xml 文件中配置即可：
+
+```xml
+<!-- 开启注解驱动 -->
+<mvc:annotation-driven />
+<!--这个也必须开启注解驱动才能使用-->
+<mvc:resources mapping="/static/**" location="/static/" />
+```
+
+- mapping：访问路径，比如/static/**，表示匹配所有/static/路径下的请求
+- location：资源文件存放的位置，可以是类路径路径、webapp 路径或者文件系统路径
+
+****
+

@@ -9,6 +9,7 @@ import org.springframework.ui.Model;
 import org.springframework.ui.ModelMap;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.servlet.ModelAndView;
+import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 
 import java.util.Arrays;
 import java.util.Map;
@@ -158,6 +159,20 @@ public class UserController {
         // 向应用域中存储数据
         application.setAttribute("applicationScope", "应用域中的一条数据");
         return "view";
+    }
+
+    // 添加闪存属性（在第一次请求中设置）
+    @PostMapping("/testFlash")
+    public String save(RedirectAttributes redirectAttributes) {
+        // addFlashAttribute 放入闪存（临时）数据
+        redirectAttributes.addFlashAttribute("testFlash", "保存成功！");
+        return "redirect:/user/result";
+    }
+
+    @GetMapping("/result")
+    public String resultPage(Model model) {
+        // 闪存属性自动绑定到 Model，可直接在视图中访问 ${msg}
+        return "result"; // 解析到 result.html
     }
 
 }

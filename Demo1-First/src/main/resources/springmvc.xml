@@ -2,7 +2,8 @@
 <beans xmlns="http://www.springframework.org/schema/beans"
        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
        xmlns:context="http://www.springframework.org/schema/context"
-       xsi:schemaLocation="http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans.xsd http://www.springframework.org/schema/context https://www.springframework.org/schema/context/spring-context.xsd">
+       xmlns:mvc="http://www.springframework.org/schema/mvc"
+       xsi:schemaLocation="http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans.xsd http://www.springframework.org/schema/context https://www.springframework.org/schema/context/spring-context.xsd http://www.springframework.org/schema/mvc https://www.springframework.org/schema/mvc/spring-mvc.xsd">
     <!--组件扫描-->
     <context:component-scan base-package="com.cell.myFirstSpringMVC.controller"/>
     <!--视图解析器-->
@@ -22,4 +23,16 @@
             </bean>
         </property>
     </bean>
+
+    <!--视图控制器，在浏览器 URL 中直接输入路径即可跳转到对应页面，但会导致所有的 @Controller 失效-->
+    <mvc:view-controller path="/index" view-name="index" />
+
+    <!--开启注解驱动，让以上配置不会导致 @Controller 失效-->
+    <mvc:annotation-driven/>
+
+    <!-- 启用默认 Servlet 处理，放行静态资源请求 -->
+    <!--<mvc:default-servlet-handler />-->
+
+    <!--凡是请求路径以"/static/"开始的，都会去"/static/"目录下找该资源-->
+    <mvc:resources mapping="/static/**" location="/static/" />
 </beans>
