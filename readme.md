@@ -486,5 +486,104 @@ public String register(User user) {
 ```
 
 ****
+## 4. @RequestHeader 注解
+
+@RequestHeader 注解用于将 HTTP 请求头中的值绑定到处理方法的参数上，它也有三个属性：value、required、defaultValue，和 RequestParam 一样
+
+```java
+@RequestHeader(value = "请求头名称", required = true/false, defaultValue = "默认值")
+```
+
+```java
+@PostMapping("/register")
+public String register(User user, 
+                       @RequestHeader(value="Referer", required = false, defaultValue = "") 
+                       String referer){
+    System.out.println(user);
+    System.out.println(referer);
+    return "success";
+}
+```
+
+****
+## 5. @CookieValue 注解
+
+@CookieValue 是 Spring 框架提供的一个注解，用于将客户端请求中携带的 Cookie 值注入到控制器方法的参数中，
+在 Web 应用中，Cookie 通常用于实现用户登录状态保持、偏好设置存储、身份标识等功能
+
+```java
+@GetMapping("/registerCookie")
+public String register(User user,
+                       @RequestHeader(value="Referer", required = false, defaultValue = "")
+                       String referer,
+                       @CookieValue(value="id", required = false, defaultValue = "2222222222")
+                       String id){
+    System.out.println(user);
+    System.out.println(referer);
+    System.out.println(id);
+    return "success";
+}
+```
+
+```html
+<script type="text/javascript">
+    function sendCookie(){
+        document.cookie = "id=123456789; expires=Thu, 18 Dec 2025 12:00:00 UTC; path=/";
+        document.location = "/springmvc/user/registerCookie";
+    }
+</script>
+<button onclick="sendCookie()">向服务器端发送Cookie</button>
+```
+
+****
+## 6. 请求的中文乱码问题
+
+### 6.1 GET 请求乱码
+
+GET 请求的参数是通过 URL 传递的，浏览器会将 URL 中的中文编码成 UTF-8（或浏览器默认编码），但低版本的 Tomcat 默认用 ISO-8859-1 来解码 URL，就会导致读取时乱码，而高版本的 Tomcat，例如 9和10，
+在默认情况下 URIEncoding 使用的就是 UTF-8 的编码方式，所以没有乱码问题
+
+可以在 web.xml 文件中配置 Tomcat 的 URI 编码为 UTF-8
+
+```xml
+<Connector URIEncoding="UTF-8" />
+```
+
+### 6.2 POST 请求乱码
+
+POST 表单提交时，参数通过请求体（body）传输，若服务端未设置正确的读取编码，会默认使用 ISO-8859-1 解析请求体，导致乱码，可以通过 `request.setCharacterEncoding("UTF-8");`解决，
+但 Tomcat 10 中不用考虑，它在底层设置了请求体采用 UTF-8 的方式，响应时也采用 UTF-8。
+
+- 在 DispatcherServlet 执行前通过过滤器解决乱码问题，而 SpringMVC 内置了这种过滤器，通过 web.xml 文件配置即可
+
+```xml
+<!--字符编码过滤器-->
+<filter>
+    <filter-name>characterEncodingFilter</filter-name>
+    <filter-class>org.springframework.web.filter.CharacterEncodingFilter</filter-class>
+    <init-param>
+        <!--设置字符集-->
+        <param-name>encoding</param-name>
+        <param-value>UTF-8</param-value>
+    </init-param>
+    <init-param>
+        <!--让请求体的编码方式强制使用上面的字符集-->
+        <param-name>forceRequestEncoding</param-name>
+        <param-value>true</param-value>
+    </init-param>
+    <init-param>
+        <!--让响应体的编码方式强制使用上面的字符集-->
+        <param-name>forceResponseEncoding</param-name>
+        <param-value>true</param-value>
+    </init-param>
+</filter>
+<filter-mapping>
+    <filter-name>characterEncodingFilter</filter-name>
+    <url-pattern>/*</url-pattern>
+</filter-mapping>
+```
+
+
+
 
 

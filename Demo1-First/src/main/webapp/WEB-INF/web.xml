@@ -27,4 +27,39 @@
         <url-pattern>/</url-pattern>
     </servlet-mapping>
 
+    <!--配置字符编码过滤器
+    <filter>
+        <filter-name>characterEncodingFilter</filter-name>
+        <filter-class>com.cell.myFirstSpringMVC.filter.CharacterEncodingFilter</filter-class>
+    </filter>
+    <filter-mapping>
+        <filter-name>characterEncodingFilter</filter-name>
+        <url-pattern>/*</url-pattern>
+    </filter-mapping>-->
+
+    <!--字符编码过滤器-->
+    <filter>
+        <filter-name>characterEncodingFilter</filter-name>
+        <filter-class>org.springframework.web.filter.CharacterEncodingFilter</filter-class>
+        <init-param>
+            <!--设置字符集-->
+            <param-name>encoding</param-name>
+            <param-value>UTF-8</param-value>
+        </init-param>
+        <init-param>
+            <!--让请求体的编码方式强制使用上面的字符集-->
+            <param-name>forceRequestEncoding</param-name>
+            <param-value>true</param-value>
+        </init-param>
+        <init-param>
+            <!--让响应体的编码方式强制使用上面的字符集-->
+            <param-name>forceResponseEncoding</param-name>
+            <param-value>true</param-value>
+        </init-param>
+    </filter>
+    <filter-mapping>
+        <filter-name>characterEncodingFilter</filter-name>
+        <url-pattern>/*</url-pattern>
+    </filter-mapping>
+
 </web-app>

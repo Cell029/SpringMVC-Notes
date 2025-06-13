@@ -76,4 +76,16 @@ public class UserController {
         System.out.println(user);
         return "success";
     }
+
+    @GetMapping("/registerCookie")
+    public String register(User user,
+                           @RequestHeader(value="Referer", required = false, defaultValue = "")
+                           String referer,
+                           @CookieValue(value="id", required = false, defaultValue = "2222222222")
+                           String id){
+        System.out.println(user);
+        System.out.println(referer);
+        System.out.println(id);
+        return "success";
+    }
 }
