@@ -2,10 +2,10 @@
   xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/maven-v4_0_0.xsd">
   <modelVersion>4.0.0</modelVersion>
   <groupId>com.cell</groupId>
-  <artifactId>Demo1-First</artifactId>
+  <artifactId>Demo2-user_manage_restful</artifactId>
   <packaging>war</packaging>
   <version>1.0-SNAPSHOT</version>
-  <name>Demo1-First Maven Webapp</name>
+  <name>Demo2-user_manage_restful Maven Webapp</name>
   <url>http://maven.apache.org</url>
   <dependencies>
     <!-- Spring MVC依赖 -->
@@ -38,20 +38,6 @@
     </dependency>
   </dependencies>
   <build>
-    <finalName>Demo1-First</finalName>
-    <plugins>
-      <plugin>
-        <groupId>org.apache.maven.plugins</groupId>
-        <artifactId>maven-compiler-plugin</artifactId>
-        <version>3.11.0</version>
-        <configuration>
-          <source>21</source>
-          <target>21</target>
-          <compilerArgs>
-            <arg>-parameters</arg>
-          </compilerArgs>
-        </configuration>
-      </plugin>
-    </plugins>
+    <finalName>Demo2-user_manage_restful</finalName>
   </build>
 </project>

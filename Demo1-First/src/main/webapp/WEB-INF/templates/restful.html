@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <title>index</title>
+</head>
+<body>
+<h1>index page</h1>
+<hr>
+<!--根据id查询：GET /api/user/1 -->
+<a th:href="@{/api/user/1}">根据id查询用户信息</a><br>
+
+<!--查询所有-->
+<a th:href="@{/api/user}">查询所有</a><br>
+
+<!--保存用户-->
+<form th:action="@{/api/user}" method="post">
+    <input type="submit" th:value="保存">
+</form>
+<br>
+<!--修改用户-->
+<hr>
+<form th:action="@{/api/user}" method="post">
+    <!--隐藏域的方式提交 _method=put -->
+    <input type="hidden" name="_method" value="put">
+    用户名：<input type="text" name="username"><br>
+    <input type="submit" th:value="修改">
+</form>
+
+</body>
+</html>

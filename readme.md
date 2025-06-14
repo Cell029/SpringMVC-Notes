@@ -1200,4 +1200,147 @@ Spring MVC默认会将所有请求（包括静态资源请求）都通过Dispatc
 - location：资源文件存放的位置，可以是类路径路径、webapp 路径或者文件系统路径
 
 ****
+# 六. RESTful 变成风格
+
+## 1. 什么是 RESTful
+
+REST 全称是 Representational State Transfer（表述性状态转移），是一种架构风格，通过统一的 URI 定位资源，通过 HTTP 动作（GET、POST、PUT、DELETE）对资源进行操作。
+RESTful 是遵循 REST 风格的 Web 服务设计方式，即以资源为中心，使用统一的 URI 和标准的 HTTP 方法来操作资源
+
+RESTful 对一个 Web 服务接口规定以下内容：
+
+1. 一切皆资源，例如服务中的每个实体（如用户、商品、订单等）都被当作资源，每个资源都由一个 URI 唯一标识
+
+```html
+/users        表示用户集合
+/users/123    表示 ID 为 123 的用户
+/orders/456   表示订单 ID 为 456 的订单
+```
+
+2. RESTful 规定使用标准的 HTTP 方法（动词）来表示对资源的操作
+
+- GET：查询资源，例如：GET /users/123
+- POST：创建资源，例如：POST /users
+- PUT：更新资源（整体），例如：PUT /users/123
+- PATCH：更新资源（部分），例如：PATCH /users/123
+- DELETE：删除资源，例如：DELETE /users/123
+
+3. URI 应该只表示资源本身，而不是操作或动作，并且使用复数名词表示资源集合，使用嵌套结构表示资源间关系
+
+```html
+/users/123/orders      // 表示用户 123 的订单
+/products/456/reviews  // 表示商品 456 的评价
+
+/getUser?id=123 // 不使用这种
+```
+
+4. RESTful 的理想状态要求通过响应中提供的链接指导客户端进行下一步操作，比如在返回用户详情时，同时返回下一个要执行的链接
+
+****
+## 2. RESTful 的简单使用
+
+- 根据 id 查询
+
+```java
+@RequestMapping(value = "/api/user/{id}", method = RequestMethod.GET)
+public String getById(@PathVariable("id") Integer id){
+    System.out.println("根据用户id查询用户信息，用户id是" + id);
+    return "ok";
+}
+```
+
+- 查询所有
+
+```java
+@RequestMapping(value = "/api/user", method = RequestMethod.GET)
+public String getAll(){
+    System.out.println("查询所有用户信息");
+    return "ok";
+}
+```
+
+- 新增
+
+```java
+@RequestMapping(value = "/api/user", method = RequestMethod.POST)
+public String save(){
+    System.out.println("保存用户信息");
+    return "ok";
+}
+```
+
+- 修改
+
+使用修改必须发送的是 PUT 请求，通过配置文件，将 POST 请求转换成 PUT 请求，
+
+```xml
+<!--隐藏的HTTP请求方式过滤器，用来将POST转换成PUT/DELETE请求-->
+<filter>
+    <filter-name>hiddenHttpMethodFilter</filter-name>
+    <filter-class>org.springframework.web.filter.HiddenHttpMethodFilter</filter-class>
+</filter>
+<filter-mapping>
+    <filter-name>hiddenHttpMethodFilter</filter-name>
+    <url-pattern>/*</url-pattern>
+</filter-mapping>
+```
+
+```xml
+<form th:action="@{/api/user}" method="post">
+    <!--隐藏域的方式提交 _method=put,必须这样写-->
+    <input type="hidden" name="_method" value="put">
+    用户名：<input type="text" name="username"><br>
+    <input type="submit" th:value="修改">
+</form>
+```
+
+```java
+@RequestMapping(value = "/api/user", method = RequestMethod.PUT)
+public String update(String username){
+    System.out.println("修改用户信息，用户名：" + username);
+    return "ok";
+}
+```
+
+****
+## 3. HiddenHttpMethodFilter 过滤器
+
+标准 HTML 的 <form> 表单只支持两种请求方式，GET 和 POST，但在 RESTful 风格中，通常还需要支持 PUT 和 DELETE，SpringMVC 提供的过滤器 HiddenHttpMethodFilter 就是专门为了解决这个问题，
+它可以拦截请求，如果发现是一个 POST 请求，且带有 `_method` 参数，就把这个请求伪装成 PUT 或 DELETE 请求
+
+```java
+@Override
+protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
+        throws ServletException, IOException {
+    HttpServletRequest requestToUse = request;
+    // 对表单中提交的数据进行判断，只对 POST 处理，
+    if ("POST".equals(request.getMethod()) && request.getAttribute(WebUtils.ERROR_EXCEPTION_ATTRIBUTE) == null) {
+        // 提取 _method 参数的值（methodParam 的默认值就是 _method），例如 _method = put，那么提取的就是 put
+        String paramValue = request.getParameter(this.methodParam);
+        if (StringUtils.hasLength(paramValue)) {
+            String method = paramValue.toUpperCase(Locale.ENGLISH);
+            if (ALLOWED_METHODS.contains(method)) { // 只有请求方式是 PUT,DELETE,PATCH的时候会创建HttpMethodRequestWrapper对象
+                // 把获取到的新的请求方式传递给构造器，将原始请求伪装为一个新的请求方法
+                requestToUse = new HttpMethodRequestWrapper(request, method);
+            }
+        }
+    }
+    filterChain.doFilter(requestToUse, response);
+}
+
+public HttpMethodRequestWrapper(HttpServletRequest request, String method) {
+    super(request);
+    this.method = method; // 将 POST 转换成 PUT
+}
+```
+
+不过字符编码过滤器执行之前不能调用 request.getParameter() 方法，如果提前调用了，乱码问题就无法解决了，
+所以request.setCharacterEncoding()方法的执行必须在所有request.getParameter()方法之前执行，而上面的过滤器又执行了这个方法，所以在web文件中配置时需要注意前后顺序，
+应该先配置CharacterEncodingFilter，然后再配置HiddenHttpMethodFilter
+
+****
+## 4. 使用 RESTFul 风格实现简单的用户管理系统
+
+
+
 
