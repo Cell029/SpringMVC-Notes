@@ -26,6 +26,7 @@
     </bean>
     <!--视图控制器-->
     <mvc:view-controller path="/" view-name="user_index" />
+    <mvc:view-controller path="/toSave" view-name="user_add"/>
     <!--处理静态资源-->
     <mvc:resources mapping="/static/**" location="/static/" />
     <!--开启注解驱动-->

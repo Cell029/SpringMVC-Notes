@@ -10,7 +10,7 @@
     <h1>用户列表</h1>
 </div>
 <div class="add-button-wrapper">
-    <a class="add-button" href="user_add.html">新增用户</a>
+    <a class="add-button" th:href="@{/toSave}">新增用户</a>
 </div>
 <table>
     <thead>
@@ -30,12 +30,36 @@
         <td th:text="${user.gender == 1 ? '男' : '女'}"></td>
         <td th:text="${user.email}"></td>
         <td>
-            <a href="">修改</a>
-            <a href="">删除</a>
+            <a th:href="@{'/user/' + ${user.id}}">修改</a>
+            <!--为删除提供一个鼠标单击事件-->
+            <a th:href="@{'/user/' + ${user.id}}" onclick="del(event)">删除</a>
         </td>
     </tr>
 
     </tbody>
 </table>
+
+<!--为删除操作准备一个form表单，点击删除时提交form表单-->
+<div style="display: none">
+    <form method="post" id="delForm">
+        <input type="hidden" name="_method" value="delete"/>
+    </form>
+</div>
+
+<script>
+    function del(event){
+        // 获取表单
+        let delForm = document.getElementById("delForm");
+        // 设置表单action
+        delForm.action = event.target.href;
+        if(window.confirm("您确定要删除吗？")){
+            // 提交表单
+            delForm.submit();
+        }
+        // 阻止超链接默认行为
+        event.preventDefault();
+    }
+</script>
+
 </body>
 </html>
