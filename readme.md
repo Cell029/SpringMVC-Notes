@@ -1622,8 +1622,99 @@ public ResponseEntity<User> getUserById(@PathVariable("id") Long id) {
 ```
 
 ****
+# 八. 文件上传与下载
 
+## 1. 文件上传
 
+文件上传是浏览器（客户端）将文件传递给 springmvc（服务端），传递方式必须是 POST 请求，并且 form 标签中必须使用 enctype（设置请求头的内容类型），默认值为 enctype="application/x-www-form-urlencoded"
+
+```html
+<!--文件上传表单-->
+<form th:action="@{/file/up}" method="post" enctype="multipart/form-data">
+    文件：<input type="file" name="fileName"/><br>
+    <input type="submit" value="上传">
+</form>
+```
+
+在 web.xml 文件的 DispatcherServlet 中需要配置一下上传文件的约束:
+
+```xml
+<!-- 文件上传配置 -->
+    <multipart-config>
+      <!--设置单个支持最大文件的大小-->
+      <max-file-size>102400</max-file-size>
+      <!--设置整个表单所有文件上传的最大值-->
+      <max-request-size>102400</max-request-size>
+      <!--设置最小上传文件大小-->
+      <file-size-threshold>0</file-size-threshold>
+    </multipart-config>
+```
+
+```java
+import java.io.BufferedInputStream;
+import java.io.File;
+
+@RequestMapping(value = "/file/up", method = RequestMethod.POST)
+// MultipartFile 类就代表前端通过 <input type="file"> 上传的文件，可以通过这个类获取文件的名称、大小、内容等
+public String fileUp(@RequestParam("fileName") MultipartFile multipartFile, HttpServletRequest request) throws IOException {
+    // 获取请求参数的名字，即 <input type="file" name="fileName"/> 中的 fileName
+    String name = multipartFile.getName();
+    System.out.println(name);
+    // 获取文件真实名
+    String originalFilename = multipartFile.getOriginalFilename();
+    System.out.println(originalFilename);
+    // 获取输入流，负责读取客户端的文件
+    InputStream in = multipartFile.getInputStream();
+    BufferedInputStream bis = new BufferedInputStream(in);
+    // 获取上传之后的存放目录
+    File file = new File(request.getServletContext().getRealPath("/upload"));
+    // 如果服务器目录不存在则新建 
+    if (!file.exists()) {
+        file.mkdirs();
+    }
+    // 开始写
+    // BufferedOutputStream out = new BufferedOutputStream(new FileOutputStream(file.getAbsolutePath() + "/" + originalFilename));
+    // 可以采用UUID来生成文件名，防止new FileOutPutStream时清空原文件
+    // 在获取到上传的存放目录后，作为本地保存的目录
+    // originalFilename.lastIndexOf(".")：获取文件名的后缀，让 uuid 代替文件名
+    BufferedOutputStream out = new BufferedOutputStream(new FileOutputStream(file.getAbsolutePath() + "/" + UUID.randomUUID().toString() 
+            + originalFilename.substring(originalFilename.lastIndexOf("."))));
+
+    byte[] bytes = new byte[1024 * 100];
+    int readCount = 0;
+    while ((readCount = in.read(bytes)) != -1) {
+        out.write(bytes, 0, readCount);
+    }
+    // 刷新缓冲流
+    out.flush();
+    // 关闭流
+    in.close();
+    out.close();
+
+    return "ok";
+}
+```
+
+****
+## 2. 文件下载
+
+```java
+@GetMapping("/download")
+public ResponseEntity<byte[]> downloadFile(HttpServletResponse response, HttpServletRequest request) throws IOException {
+    File file = new File(request.getServletContext().getRealPath("/upload") + "/1.jpeg");
+    // 创建响应头对象
+    HttpHeaders headers = new HttpHeaders();
+    // 设置响应内容类型
+    headers.setContentType(MediaType.APPLICATION_OCTET_STREAM);
+    // 设置下载文件的名称
+    headers.setContentDispositionFormData("attachment", file.getName());
+    // 下载文件
+    ResponseEntity<byte[]> entity = new ResponseEntity<byte[]>(Files.readAllBytes(file.toPath()), headers, HttpStatus.OK);
+    return entity;
+}
+```
+
+****
 
 
 

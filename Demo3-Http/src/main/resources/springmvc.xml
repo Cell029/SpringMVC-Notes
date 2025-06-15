@@ -30,6 +30,7 @@
     <mvc:view-controller path="/" view-name="index" />
     <mvc:view-controller path="/index2" view-name="index2" />
     <mvc:view-controller path="/index3" view-name="index3" />
+    <mvc:view-controller path="/upload" view-name="upload" />
     <!--处理静态资源-->
     <mvc:resources mapping="/static/**" location="/static/" />
 
