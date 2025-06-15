@@ -13,6 +13,9 @@
     <!--隐藏域的方式提交id-->
     <input type="hidden" name="id" th:value="${user.id}">
 
+    <!--
+        用户点击“修改”按钮后，浏览器会发送一个 HTTP 请求，表单中填写的数据会作为请求参数，一起发送给服务器
+    -->
     <label>用户名:</label>
     <input type="text" name="name" th:value="${user.name}" required>
 

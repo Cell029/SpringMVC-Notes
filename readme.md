@@ -1344,5 +1344,291 @@ public HttpMethodRequestWrapper(HttpServletRequest request, String method) {
 [User_Manage_System](./Demo2-user_manage_restful/src/main/java/com/cell/usermanage)
 
 ****
+# 七. HTTP消息转换器（HttpMessageConverter）
+
+前端给后端发请求时（Request Body），HttpMessageConverter 负责把请求体中的数据（如 JSON、XML、表单数据）转成 Java 对象，交给控制器方法使用，
+后端给前端返回响应时（Response Body），HttpMessageConverter 负责把 Java 对象转成指定格式（如 JSON、XML、String），发送给前端
+
+## 1. HTTP 消息
+
+### 1.1 HTTP 请求消息（Request）
+
+当客户端（比如浏览器、前端、Postman）向服务器发送请求时，会构造一个完整的 请求消息，它包括：
+
+```text
+请求行
+请求头
+（空行）
+请求体
+```
+
+- 请求行：请求方法 请求路径 HTTP版本
+
+```text
+GET /user?id=1 HTTP/1.1
+POST /user HTTP/1.1
+PUT /user/1 HTTP/1.1
+DELETE /user/1 HTTP/1.1
+```
+
+- 请求头：说明客户端环境、数据类型、认证信息等，以键值对表示
+
+```text
+Host: localhost:8080 -- 指定请求将被发送到的服务器主机和端口
+User-Agent: Mozilla/5.0 
+Content-Type: application/json -- 请求体的内容类型，告诉服务器发送的是哪种格式的数据
+Accept: application/json -- 客户端期望从服务器接收到的响应内容类型
+Authorization: Bearer xxx
+```
+
+- 空行：请求头结束的标志，必须有一行空行，并且不能随意空行，不然就会把空行下面的内容看作是请求体
+
+- 请求体：包含请求中传递的数据，常见于 POST、PUT 请求
+
+json 请求体：
+
+```json
+{
+  "name": "张三",
+  "email": "zhangsan@qq.com"
+}
+```
+
+表单请求体（html）：
+
+```html
+name=张三&email=zhangsan%qq.com
+```
+
+****
+### 1.2 HTTP 响应消息（Response）
+
+服务器接收到请求后，返回一个 响应消息，包含状态信息和响应数据
+
+```text
+状态行
+响应头
+（空行）
+响应体
+```
+
+- 状态行：请求方法 请求目标（路径+查询参数） HTTP版本
+
+```text
+GET /user/list?page=1 HTTP/1.1 -- 对应完整路径：http://localhost:8080/user/list?page=1
+```
+
+- 响应头：说明服务器返回的数据类型、长度、缓存控制等信息
+
+```text
+Content-Type: text/plain; charset=utf-8 -- 响应体的格式是普通文本（text/plain），字符编码为 UTF-8
+Content-Length: 12 -- 字节长度
+Connection: keep-alive -- 告诉客户端这次响应后，TCP 连接不会立即关闭
+Server: Apache/2.4.43 (Win64) OpenSSL/1.1.1g
+```
+
+- 空白行：响应头和响应体之间，必须有一行空行
+
+- 响应体：服务器返回的真实数据，可以是 HTML、JSON、XML、图片、二进制等，也就是写的前端页面中的内容
+
+```json
+{
+  "id": 1,
+  "name": "张三",
+  "email": "zhangsan@example.com"
+}
+```
+
+```html
+<h1>Hello, world!</h1>
+```
+
+****
+## 2. 转换器的作用
+
+它负责将 HTTP 请求体的数据转换成 Java 对象，或者将 Java 对象转换成 HTTP 响应体的数据格式
+
+### 2.1 请求中的转换：RequestBody 处理过程
+
+客户端发送：
+
+```text
+POST /user HTTP/1.1
+Content-Type: application/json
+
+{
+  "id": 1,
+  "name": "张三",
+  "email": "zhangsan@qq.com"
+}
+```
+
+Spring 的转换过程：
+
+转换器会先判断请求体 Content-Type（如 application/json），Spring 会根据控制器方法的返回类型和请求头的 Accept 值（客户端期望的数据格式）从已注册的 HttpMessageConverter 中选择合适的转换器来进行序列化，
+然后把 JSON 字符串转为 User 对象
+
+```java
+@PostMapping("/user")
+public void saveUser(@RequestBody User user) {
+    // Spring 会用 HttpMessageConverter 把 JSON 转为 User 对象
+}
+```
+
+****
+### 2.2 响应中的转换：ResponseBody 处理过程
+
+服务器返回：
+
+```text
+GET /user/1 HTTP/1.1
+Accept: application/json
+```
+
+Spring 的转换：
+
+```java
+@GetMapping("/user/{id}")
+@ResponseBody
+public User getUser(@PathVariable int id) {
+    // 根据 id 查询用户信息
+    return new User(id,...);
+}
+```
+
+****
+## 3. Spring MVC 中的 AJAX 请求
+
+Ajax 是一种在不重新加载整个页面的情况下与服务器交换数据并更新部分网页的技术，在 SpringMVC 中 Ajax 请求常用于表单数据提交、动态加载数据和异步操作（点赞、收藏、查询等），
+因为它的不重新加载特性，所以在调用控制器方法时不用返回逻辑视图名称，而是返回具体的数据，
+
+### 3.1 使用原生 Servlet 完成 ajax 请求
+
+```java
+@GetMapping(value = "/ajax")
+public void hello(HttpServletResponse response) throws IOException {
+    PrintWriter writer = response.getWriter();
+    writer.println("hello");
+}
+```
+
+****
+### 3.2 @ResponseBody
+
+@ResponseBody 可以将控制器方法的返回值直接作为 HTTP 响应体的内容（body）发送给客户端，而不是返回一个逻辑视图
+
+使用前需要引入依赖，将java对象转换为json格式字符串，并在web.xml文件中开启注解驱动：
+
+```xml
+<dependency>
+  <groupId>com.fasterxml.jackson.core</groupId>
+  <artifactId>jackson-databind</artifactId>
+  <version>2.17.0</version>
+</dependency>
+```
+
+```java
+// 返回 JSON 数据
+@GetMapping("/user/{id}")
+@ResponseBody
+public User getUser(@PathVariable Long id) {
+    return userDao.getUserById(id);
+}
+
+// 返回字符串
+@GetMapping("/hello")
+@ResponseBody
+public String sayHello() {
+    return "Hello, Spring MVC!";
+}
+```
+
+工作流程：
+
+在 DispatcherServlet 调用完对应的控制器方法后，Spring MVC 会检查该方法是否有 @ResponseBody 注解，如果有 @ResponseBody，Spring 就不会按照视图解析器去查找视图页面，
+而是直接把控制器方法的返回结果转换成合适的格式（如 JSON、字符串等）后，写入 HTTP 响应体，返回给浏览器或前端请求，如果返回的类型是对象，
+Spring MVC 就会通过 HttpMessageConverter（HTTP 消息转换器）将 Java 对象转换成 HTTP 响应体中可识别的格式（如 JSON、XML、纯文本等）
+
+****
+### 3.3 @RestController
+
+它结合了 @Controller 和 @ResponseBody，让被注解的类变成一个控制器并默认所有方法的返回值都会自动加上 @ResponseBody 的效果，即直接作为响应体返回数据（JSON、XML、字符串等），而不是去解析视图
+
+****
+### 3.4 @RequestBody
+
+将 HTTP 请求体中的数据通过合适的 HttpMessageConverter（例如 JSON 转换器）将请求体数据反序列化为 Java 对象，绑定到控制器方法的参数上，需要注意的是，
+只有请求体中包含 JSON（或 XML、文本等非表单格式）数据时，才需要用 @RequestBody 来接收，如果是传统 HTML 的表单提交，不能（也不需要）使用 @RequestBody，它走的是参数映射机制（key=value）
+
+```java
+@RequestMapping("/save")
+// 只能使用在形参上
+public String save(@RequestBody String requestBodyStr){
+    System.out.println("请求体：" + requestBodyStr);
+    return "success";
+}
+```
+
+****
+### 3.5 RequestEntity
+
+RequestEntity 是 Spring 提供的一个封装 HTTP 请求消息的泛型类，它通常用于接收完整的 HTTP 请求信息，可以通过它来获取请求头、请求体、请求方法（GET、POST 等）以及请求 URL
+
+```java
+ @RequestMapping("/user")
+public String send(RequestEntity<User> requestEntity){
+    System.out.println("请求方式：" + requestEntity.getMethod());
+    System.out.println("请求URL：" + requestEntity.getUrl());
+    HttpHeaders headers = requestEntity.getHeaders();
+    System.out.println("请求的内容类型：" + headers.getContentType());
+    System.out.println("请求头：" + headers);
+
+    User user = requestEntity.getBody();
+    System.out.println(user);
+    System.out.println(user.getUsername());
+    System.out.println(user.getPassword());
+    return "success";
+}
+```
+
+```text
+请求方式：POST
+请求URL：http://localhost:8080/springmvc/user
+请求的内容类型：application/json;charset=UTF-8
+请求头：[host:"localhost:8080", connection:"keep-alive"...]
+com.cell.springmvc.bean.User@399a3b36
+zhangsan
+1234
+```
+
+****
+### 3.6 ResponseEntity
+
+用该类的实例可以封装响应协议，包括：状态行、响应头、响应体。也就是说：如果想定制属于自己的响应协议，可以使用该类，但返回值类型必须是响应体中的类型，例如：
+ResponseEntity<User>
+
+```java
+@GetMapping("/user/{id}")
+public ResponseEntity<User> getUserById(@PathVariable("id") Long id) {
+    User user = userService.getById(id);
+    if (user == null) {
+        // 当没找到资源时就把状态码 404 返回给前端，并把响应体置空
+        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(null);
+    } else {
+        // HTTP 状态码 200（OK，表示请求成功），把 user 对象转成 JSON 格式放到响应体中，发送给前端
+        return ResponseEntity.ok(user);
+    }
+}
+```
+
+****
+
+
+
+
+
+
+
+
 
 

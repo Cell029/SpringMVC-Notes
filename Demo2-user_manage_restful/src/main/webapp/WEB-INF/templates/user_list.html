@@ -30,8 +30,10 @@
         <td th:text="${user.gender == 1 ? '男' : '女'}"></td>
         <td th:text="${user.email}"></td>
         <td>
+            <!--通过发送user.id给Controller，将此id的user查询到，然后存入request域并跳转到edit页面，在edit页面从request域中获取到这个id的user-->
             <a th:href="@{'/user/' + ${user.id}}">修改</a>
             <!--为删除提供一个鼠标单击事件-->
+            <!--a 标签默认是一个get请求，所以要添加一个阻止默认请求-->
             <a th:href="@{'/user/' + ${user.id}}" onclick="del(event)">删除</a>
         </td>
     </tr>

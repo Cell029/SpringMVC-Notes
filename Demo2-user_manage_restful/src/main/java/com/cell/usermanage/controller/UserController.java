@@ -44,7 +44,7 @@ public class UserController {
     }
 
     @PutMapping("/user")
-    public String modify(User user){
+    public String modify(User user){ // SpringMVC 自动将表单中的字段封装进user对象
         // 更新数据
         userDao.update(user);
         // 重定向
