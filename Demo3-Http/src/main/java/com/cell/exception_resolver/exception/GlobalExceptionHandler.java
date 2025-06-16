@@ -10,7 +10,7 @@ public class GlobalExceptionHandler {
     public ModelAndView handleException(Exception e) {
         ModelAndView mav = new ModelAndView();
         mav.setViewName("error"); // 设置视图名：error.html
-        mav.addObject("e", e); // 把异常信息传给视图
+        mav.addObject("e", e.getMessage()); // 把异常信息传给视图
         return mav;
     }
 }

@@ -1820,7 +1820,193 @@ ModelAndView exMv = resolver.resolveException(request, response, handler, ex);
 这是个异常处理方法，我要返回一个 ModelAndView 对象，你帮我寻找对应的异常处理器处理我封装的异常信息
 
 ****
+# 十. 拦截器
 
+Spring MVC 中的拦截器是基于 Java 的反射机制和 AOP 思想实现的一种处理机制，可以在请求进入控制器之前、控制器处理之后，或视图渲染完成之后执行一些通用逻辑
 
+- 拦截器的常见应用场景：
 
+1. 登陆验证：对于需要登录才能访问的网址，使用拦截器可以判断用户是否已登录，如果未登录则跳转到登录页面
+2. 权限控制：根据当前用户的角色权限判断是否具有访问指定资源的权限，拒绝未经授权的用户访问
+3. 请求日志记录：记录请求信息，例如请求地址、请求参数、请求时间等，用于排查问题和性能优化
+4. 响应数据修改：可以对响应的内容进行修改，例如添加头信息、调整响应内容格式等
 
+## 1. 拦截器与过滤器的区别
+
+拦截器和过滤器的区别在于它们的作用层面不同：
+
+- 过滤器更注重在请求和响应的流程中进行处理，可以修改请求和响应的内容，例如设置编码和字符集、请求头、状态码等。
+- 拦截器则更加侧重于对控制器进行前置或后置处理，在请求到达控制器之前或之后进行特定的操作，例如打印日志、权限验证等。
+
+```markdown
+请求进入
+↓
+┌────────┐ ┌────────┐ ┌──────────────────────┐ ┌───────────────┐ ┌───────────────┐ ┌────────────┐
+│ Filter1│→│ Filter2│→│  DispatcherServlet   │→│ Interceptor1  │→│ Interceptor2  │→│ Controller │
+└────────┘ └────────┘ └──────────────────────┘ └───────┬───────┘ └───────┬───────┘ └────────────┘
+                                                       │ preHandle       │ preHandle      
+                                                       ▼                 ▼                 
+                                                          【Controller 处理请求】                   
+                                                        ▲                     ▲                 
+                                                        │ postHandle          │ postHandle     
+                                                        ▼                     ▼                 
+                                                        【视图渲染（Render）】                          
+                                                        ▲                      ▲   
+                                                        │ afterCompletion      │ afterCompletion
+                                                        ▼                      ▼
+                                                             【响应返回给客户端】
+```
+
+****
+## 2. 拦截器的创建与基本配置
+
+在 Spring MVC 中，拦截器通过实现 HandlerInterceptor 接口来创建，该接口定义了三个可选择性实现的方法：
+
+1. boolean preHandle()
+
+在控制器方法执行之前执行，返回 ture：放行，继续执行后续流程；返回 false：中断流程，后续的拦截器、控制器方法都不会再执行。常用于登录校验、权限验证、请求日志记录等
+
+2. void postHandle()
+
+控制器方法执行之后，视图渲染之前执行，可对 ModelAndView 进行修改，比如添加模型数据或更换视图
+
+3. void afterCompletion()
+
+视图渲染完成后 执行（即请求完全处理完毕后），适合进行资源清理、日志记录、异常监控等收尾工作，无论是否抛出异常，都会执行（前提是 preHandle 返回 true）
+
+```markdown
+preHandle → Controller → postHandle → 视图渲染 → afterCompletion
+```
+
+### 2.1 基于 xml 文件配置
+
+在 springmvc.xml 文件中配置以下信息，让选择的路径进入拦截器中进行判断：
+
+```xml
+<mvc:interceptors>
+    <mvc:interceptor>
+        <!--所有路径都被拦截，除了 /login 和 /doLogin-->
+        <mvc:mapping path="/**"/>
+        <mvc:exclude-mapping path="/login"/>
+        <mvc:exclude-mapping path="/doLogin"/>
+        <!--除 /test 路径之外-->
+        <mvc:exclude-mapping path="/test"/>
+        <bean class="com.cell.spring_interceptor.interceptor.Interceptor"/>
+    </mvc:interceptor>
+</mvc:interceptors>
+```
+
+拦截器：需要实现 HandlerInterceptor 接口，然后重写需要的方法：
+
+```java
+@Override
+public boolean preHandle(HttpServletRequest request,
+                         HttpServletResponse response,
+                         Object handler) throws Exception {
+    Object user = request.getSession().getAttribute("loginUser");
+    if (user == null) {
+        response.sendRedirect(request.getContextPath() + "/login");
+        return false;
+    }
+    return true;
+}
+```
+
+```java
+@PostMapping("/doLogin")
+public String doLogin(HttpServletRequest request, @RequestParam String username, @RequestParam String password) {
+    // 简单模拟验证
+    if ("admin".equals(username) && "123".equals(password)) {
+        // 登录成功，保存用户到 session
+        request.getSession().setAttribute("loginUser", username);
+        return "redirect:/home";  // 登录成功跳主页
+    }
+    // 登录失败，回登录页（可加错误提示）
+    return "login";
+}
+```
+
+****
+### 2.2 基于 Java 配置 + 注解组合
+
+1. 创建拦截器类
+
+```java
+@Component
+public class Interceptor implements HandlerInterceptor {
+    // 1. 前置处理（Controller 方法调用前）
+    @Override
+    public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler) throws Exception {
+        System.out.println("Interceptor -> preHandle()");
+        return true;
+    }
+    // 2. 后置处理（Controller 方法调用后，视图渲染前）
+    @Override
+    public void postHandle(HttpServletRequest request, HttpServletResponse response, Object handler,
+                           ModelAndView modelAndView) throws Exception {
+        System.out.println("Interceptor -> postHandle()");
+    }
+    // 3. 完成处理（视图渲染后）
+    @Override
+    public void afterCompletion(HttpServletRequest request, HttpServletResponse response, Object handler, Exception ex)
+            throws Exception {
+        System.out.println("Interceptor -> afterCompletion()");
+    }
+}
+```
+
+2. 创建注册拦截器的配置类
+
+SpringMVC 不会自动识别拦截器，需要实现 WebMvcConfigurer 接口，重写它的方法
+
+```java
+@Configuration
+public class WebConfig implements WebMvcConfigurer {
+
+    @Autowired
+    private Interceptor interceptor;
+
+    @Override
+    public void addInterceptors(InterceptorRegistry registry) {
+        registry.addInterceptor(loginInterceptor)
+                .addPathPatterns("/**")                          // 拦截所有请求
+                .excludePathPatterns("/login", "/css/**", "/js/**", "/images/**"); // 放行登录页、静态资源
+    }
+}
+```
+
+- `.addPathPatterns()`：拦截哪些路径，支持通配符
+- `.excludePathPatterns()`：排除不拦截的路径，防止登录页被拦截死循环
+
+****
+## 3. 执行流程
+
+```java
+public class DispatcherServlet extends FrameworkServlet {
+    protected void doDispatch(HttpServletRequest request, HttpServletResponse response) throws Exception {
+        // 调用所有拦截器的 preHandle 方法
+        if (!mappedHandler.applyPreHandle(processedRequest, response)) {
+            // 如果 mappedHandler.applyPreHandle(processedRequest, response) 返回false，以下的return语句就会执行
+            // 也就是 preHandle 返回 false 的话...
+            return;
+        }
+        // 调用处理器方法
+        mv = ha.handle(processedRequest, response, mappedHandler.getHandler());
+        // 调用所有拦截器的 postHandle 方法
+        mappedHandler.applyPostHandle(processedRequest, response, mv);
+        // 处理视图
+        processDispatchResult(processedRequest, response, mappedHandler, mv, dispatchException);
+    }
+
+    private void processDispatchResult(HttpServletRequest request, HttpServletResponse response,
+			@Nullable HandlerExecutionChain mappedHandler, @Nullable ModelAndView mv,
+			@Nullable Exception exception) throws Exception {
+        // 渲染页面
+        render(mv, request, response);
+        // 处理完视图后，调用所有拦截器的 afterCompletion 方法
+        mappedHandler.triggerAfterCompletion(request, response, null);
+    }
+}
+```
+
+****

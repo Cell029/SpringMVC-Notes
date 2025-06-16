@@ -45,5 +45,20 @@
   </dependencies>
   <build>
     <finalName>Demo3-Http</finalName>
+    <plugins>
+      <!-- 配置maven-compiler-plugin -->
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-compiler-plugin</artifactId>
+        <version>3.8.1</version>
+        <configuration>
+          <source>21</source> <!-- 你用的JDK版本 -->
+          <target>21</target>
+          <compilerArgs>
+            <arg>-parameters</arg> <!-- 关键，加这个参数保留方法参数名 -->
+          </compilerArgs>
+        </configuration>
+      </plugin>
+    </plugins>
   </build>
 </project>

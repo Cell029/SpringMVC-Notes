@@ -42,10 +42,21 @@
         <property name="exceptionAttribute" value="e"/>
     </bean>-->
 
+    <!-- 拦截器配置 -->
+    <!--<mvc:interceptors>
+        <mvc:interceptor>
+            &lt;!&ndash;所有路径都被拦截，除了 /login 和 /doLogin&ndash;&gt;
+            <mvc:mapping path="/**"/>
+            <mvc:exclude-mapping path="/login"/>
+            <mvc:exclude-mapping path="/doLogin"/>
+            <bean class="com.cell.spring_interceptor.interceptor.Interceptor"/>
+        </mvc:interceptor>
+    </mvc:interceptors>
+-->
     <!--开启注解驱动-->
     <mvc:annotation-driven/>
     <!--视图控制器-->
-    <mvc:view-controller path="/" view-name="index" />
+    <!--<mvc:view-controller path="/" view-name="index" />-->
     <mvc:view-controller path="/index2" view-name="index2" />
     <mvc:view-controller path="/index3" view-name="index3" />
     <mvc:view-controller path="/upload" view-name="upload" />
