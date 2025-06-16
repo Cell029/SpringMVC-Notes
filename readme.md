@@ -1715,10 +1715,111 @@ public ResponseEntity<byte[]> downloadFile(HttpServletResponse response, HttpSer
 ```
 
 ****
+# 九. 异常处理器
 
+在 SpringMVC 中，当请求处理过程中抛出异常时，SpringMVC 并不会直接将异常信息返回给客户端，而是会将异常委托给一个专门的异常处理组件：HandlerExceptionResolver 接口，
+SpringMVC 会遍历所有的 HandlerExceptionResolver，找到能够处理该异常的解析器，并将其结果返回给 DispatcherServlet
 
+## 1. 默认的异常处理器
 
+在 SpringMVC 中，DefaultHandlerExceptionResolver 是系统默认注册的一个异常处理器，
+用于处理常见的标准异常（如请求方法不匹配、参数类型转换错误等），并将其转换为适当的 HTTP 响应码
 
+- 请求方式与处理方式不一致时的默认处理
+
+当请求方式与控制器方法不匹配时，例如前端用 POST 请求，但后端只支持 GET，这时 SpringMVC 会抛出：`org.springframework.web.HttpRequestMethodNotSupportedException`，
+此异常由 DefaultHandlerExceptionResolver 处理，并设置响应状态码为 405 Method Not Allowed，向前端返回提示信息：Request method 'POST' not supported
+
+****
+## 2. 自定义异常处理器
+
+自定义异常处理机制有两种语法，它们都需要使用到 SimpleMappingExceptionResolver：
+
+- 通过XML配置文件
+- 通过注解
+
+### 2.1 通过 XML 配置文件
+
+> 在 springmvc.xml 中配置的 SimpleMappingExceptionResolver 仅处理控制器方法执行过程中抛出的异常，像 405 错误（Method Not Allowed）发生在请求匹配阶段，
+> 此时控制器方法尚未执行，因此不会触发自定义的异常映射
+
+```xml
+<bean class="org.springframework.web.servlet.handler.SimpleMappingExceptionResolver">
+    <property name="exceptionMappings">
+        <props>
+            <!--用来指定出现异常后，跳转的视图-->
+            <!--
+                这个仅处理控制器方法执行过程中抛出的异常，像 405 错误（Method Not Allowed）发生在请求匹配阶段，
+                此时控制器方法尚未执行，因此不会触发自定义的异常映射
+            -->
+            <prop key="java.lang.Exception">error</prop>
+            <!--也可以配置多个异常，每个异常对应一个跳转页面-->
+            <!--
+                <prop key="java.lang.ArithmeticException">error/arithmetic</prop>
+                <prop key="java.lang.NullPointerException">error/null</prop>
+            -->
+        </props>
+    </property>
+    <!--将异常信息存储到request域，value属性用来指定存储时的key-->
+    <property name="exceptionAttribute" value="e"/>
+</bean>
+```
+
+- 需要注意的是：
+
+默认情况下，Thymeleaf 只能访问 Model、Session、Application 作用域中的数据，Request 中的属性也可以访问，但前提是跳转到的页面是由控制器返回视图，
+而不是直接通过异常解析器转发过去的，所以是没办法访问到以下信息的：
+
+```html
+<p th:text="'异常信息：' + ${e.message}"></p>
+<p th:text="'异常类型：' + ${e.class.name}"></p>
+```
+
+****
+### 2.2 通过注解
+
+> 核心注解：@ControllerAdvice + @ExceptionHandler
+
+它是一个单独的异常处理器类，它会捕获处理器方法中产生的异常信息，然后将信息传递给request域中
+
+```java
+@ControllerAdvice // 这是一个全局异常处理类
+public class GlobalExceptionHandler {
+    @ExceptionHandler(Exception.class) // 捕获所有 Exception 异常
+    public ModelAndView handleException(Exception e) {
+        ModelAndView mav = new ModelAndView();
+        mav.setViewName("error"); // 设置视图名：error.html
+        mav.addObject("e", e); // 把异常信息传给视图
+        return mav;
+    }
+}
+```
+
+上面有提到，使用配置文件的形式是无法在 thymeleaf 的页面中获取到 request 域中的数据的，但使用注解的方式就可以，原因如下：
+
+当 SpringMVC 中的控制器方法执行时抛出异常，异常会被 DispatcherServlet 捕获，在其核心方法 doDispatch() 中有如下代码：
+
+```java
+try {
+    // 执行控制器方法
+    mv = ha.handle(processedRequest, response, mappedHandler.getHandler());
+} catch (Exception ex) {
+    // 捕获异常后，进入异常处理流程
+    this.processDispatchResult(request, response, mappedHandler, mv, dispatchException);
+}
+```
+
+在 DispatcherServlet 的 processHandlerException() 方法中调用了所有异常处理器：
+
+```java
+ModelAndView exMv = resolver.resolveException(request, response, handler, ex);
+```
+
+如果没有使用任何 @ExceptionHandler，就不会有 resolver 返回有效的 ModelAndView，异常会被原样抛出，转交给容器（Tomcat）去处理，所以 request 域中就不会有任何异常信息。
+因为通过 @ExceptionHandler，这些解析器才能负责将异常映射成对应的 ModelAndView，有了这个才能在 request 域中存放异常信息，所以这个注解的作用就是告诉 Spring，
+这是个异常处理方法，我要返回一个 ModelAndView 对象，你帮我寻找对应的异常处理器处理我封装的异常信息
+
+****
 
 
 

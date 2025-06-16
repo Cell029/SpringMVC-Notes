@@ -24,6 +24,24 @@
             </bean>
         </property>
     </bean>
+
+    <!--配置自定义异常-->
+    <!--<bean class="org.springframework.web.servlet.handler.SimpleMappingExceptionResolver">
+        <property name="exceptionMappings">
+            <props>
+                &lt;!&ndash;用来指定出现异常后，跳转的视图&ndash;&gt;
+                <prop key="java.lang.Exception">error</prop>
+                &lt;!&ndash;也可以配置多个异常，每个异常对应一个跳转页面&ndash;&gt;
+                &lt;!&ndash;
+                    <prop key="java.lang.ArithmeticException">error/arithmetic</prop>
+                    <prop key="java.lang.NullPointerException">error/null</prop>
+                &ndash;&gt;
+            </props>
+        </property>
+        &lt;!&ndash;将异常信息存储到request域，value属性用来指定存储时的key。&ndash;&gt;
+        <property name="exceptionAttribute" value="e"/>
+    </bean>-->
+
     <!--开启注解驱动-->
     <mvc:annotation-driven/>
     <!--视图控制器-->
@@ -31,6 +49,7 @@
     <mvc:view-controller path="/index2" view-name="index2" />
     <mvc:view-controller path="/index3" view-name="index3" />
     <mvc:view-controller path="/upload" view-name="upload" />
+    <mvc:view-controller path="/hello" view-name="hello" />
     <!--处理静态资源-->
     <mvc:resources mapping="/static/**" location="/static/" />
 
