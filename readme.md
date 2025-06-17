@@ -2112,6 +2112,53 @@ public interface View {
 }
 ```
 
+## 整体流程
+
+```text
+【前端控制器】
+DispatcherServlet
+    │
+    │ 1. 根据请求调用
+    ▼
+【处理器映射器集合】
+HandlerMapping[] (RequestMappingHandlerMapping 映射器、 SimpleUrlHandlerMapping 映射器，返回 Handler)
+    │
+    │ 2. 查找匹配的处理器（HandlerMethod）
+    ▼
+【处理器执行链】
+HandlerExecutionChain (handler = HandlerMethod + 拦截器链)
+    │
+    │ 3. 根据 handler 获取适合的 HandlerAdapter
+    ▼
+【处理器适配器集合】
+HandlerAdapter[] (RequestMappingHandlerAdapter)
+    │
+    │ 4. 调用适配器的 handle() 方法执行处理器，内部包含：
+    │    - 拦截器 preHandle（顺序执行，任何返回 false 结束请求）
+    │    - 数据绑定（参数解析和绑定，使用 WebDataBinder 和 HttpMessageConverter）
+    │    - 通过反射调用 Controller 方法
+    │    - 返回值处理，封装成 ModelAndView（也可能是一个逻辑视图名称）
+    │    - 拦截器 postHandle（逆序执行）
+    ▼
+【ModelAndView】
+    │
+    │ 5. DispatcherServlet 调用视图解析器
+    ▼
+【视图解析器集合】
+ViewResolver[] (InternalResourceViewResolver, ThymeleafViewResolver)
+    │
+    │ 6. 返回 View 对象，调用其 render() 方法渲染视图
+    ▼
+【视图对象】
+View
+    │
+    │ 7. 拦截器 afterCompletion（逆序执行）
+    ▼
+完成请求响应
+```
+
+****
+
 ## 1. 关于：HandlerExecutionChain mappedHandler = getHandler(processedRequest);
 
 1. HandlerExecutionChain：它是处理器执行链对象，表示一次请求由哪个控制器方法处理，并在它前后执行哪些拦截器
@@ -2315,9 +2362,97 @@ void applyPostHandle(HttpServletRequest request, HttpServletResponse response, @
 ```
 
 ****
+## 6. web 服务器启动时的行为
 
+1. Servlet 容器启动阶段
 
+当启动 Web 项目（如 war 包部署到 Tomcat 中），Tomcat 会读取 web.xml 文件：
 
+```xml
+<!--如果是基于 web.xml 配置，会在其中找到如下信息-->
+<servlet>
+    <servlet-name>dispatcherServlet</servlet-name>
+    <servlet-class>org.springframework.web.servlet.DispatcherServlet</servlet-class>
+    <init-param>...</init-param>
+    <load-on-startup>1</load-on-startup> <!-- 重要：指定 DispatcherServlet 在服务器启动时就加载 -->
+    <!--
+        如果 <load-on-startup> 标签没有写，那么 DispatcherServlet 就不会在 Web 服务器启动时初始化，而是第一次被请求到时才初始化
+    -->
+</servlet>
+```
+
+Servlet 容器会调用 DispatcherServlet 的 init() 方法，而 DispatcherServlet 继承自 FrameworkServlet，最终由其父类 HttpServletBean 调用：
+
+```java
+@Override
+public final void init() throws ServletException {
+    this.initServletBean(); // 核心初始化逻辑
+}
+```
+
+2. DispatcherServlet 初始化阶段
+
+通过初始化阶段，程序会运行到上面方法的 initServletBean() 方法中，也就是会进入 FrameWorkServlet 类中的 initServletBean() 方法：
+
+```java
+protected final void initServletBean() throws ServletException {
+    this.webApplicationContext = this.initWebApplicationContext(); // 核心初始化逻辑
+}
+```
+
+ApplicationContext 是 Spring 的上下文对象（IoC 容器上下文对象），WebApplicationContext 是专门适用于 Web 项目的 Spring 上下文对象，也就是说它会有一个 ServletContext 上下文对象
+
+接着进入 initWebApplicationContext() 方法中，里面的核心方法是 onRefresh(wac)，但是在 FrameWorkServlet 类中没有具体的实现，于是会进入它的子类，
+也就是回到 DispatcherServlet 类中，执行 onRefresh(wac) 方法
+
+```java
+protected WebApplicationContext initWebApplicationContext() {
+    if (!this.refreshEventReceived) {
+        synchronized(this.onRefreshMonitor) {
+            this.onRefresh(wac);
+        }
+    }
+}
+```
+
+3. 在 DispatcherServlet 类中执行对应的初始化方法来初始化 SpringMVC 的上下文和九大组件
+
+```java
+protected void onRefresh(ApplicationContext context) {
+        this.initStrategies(context);
+    }
+
+protected void initStrategies(ApplicationContext context) {
+    this.initMultipartResolver(context);
+    this.initLocaleResolver(context);
+    this.initThemeResolver(context);
+    this.initHandlerMappings(context); // 初始化映射器集合
+    this.initHandlerAdapters(context); // 初始化适配器集合
+    this.initHandlerExceptionResolvers(context); // 初始化异常处理器集合
+    this.initRequestToViewNameTranslator(context);
+    this.initViewResolvers(context); // 初始化视图解析器集合
+    this.initFlashMapManager(context);
+}
+```
+
+4. 控制器方法和 HandlerMethod 的注册
+
+当 SpringMVC 容器初始化完成后，会将所有标注了 @RequestMapping（或其派生注解）的方法封装为 HandlerMethod 并注册到 RequestMappingHandlerMapping 中，
+所以控制器是在 Web 服务启动时就完成的注册，而不是调用时
+
+```java
+@Controller
+@RequestMapping("/user")
+public class UserController {
+    @GetMapping("/info")
+    public String getInfo() { return "info"; }
+}
+
+// 解析成
+路径 /user/info → HandlerMethod("UserController#getInfo")
+```
+
+****
 
 
 
