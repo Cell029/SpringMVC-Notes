@@ -2381,7 +2381,8 @@ void applyPostHandle(HttpServletRequest request, HttpServletResponse response, @
 </servlet>
 ```
 
-Servlet 容器会调用 DispatcherServlet 的 init() 方法，而 DispatcherServlet 继承自 FrameworkServlet，最终由其父类 HttpServletBean 调用：
+Servlet 容器会调用 DispatcherServlet 的 init(ServletConfig config) 方法。该方法在 DispatcherServlet 的祖先类 HttpServletBean 中被重写，
+HttpServletBean 会在其中调用 init() 方法：
 
 ```java
 @Override
@@ -2453,6 +2454,26 @@ public class UserController {
 ```
 
 ****
+# 十二. 手写 [SpringMVC](./Demo4-myspringmvc) 容器
+
+## 1. SpringMVC 中重要的接口和类
+
+1. DispatcherServlet 类 extends HttpServlet，所有的 Servlet 都要实现 Servlet 接口或继承 HttpServlet，通过重写其中的 service() 方法达到前后端连接的目的
+2. HandlerExecutionChain 类
+3. HandlerMapping 处理器的映射器接口
+4. RequestMappingHandlerMapping 实现类，专门为 @RequestMapping 注解服务的处理器的映射器
+5. HandlerMethod 类
+6. HandlerInterceptor 拦截器接口
+7. HandlerAdapter 处理器的适配器接口
+8. RequestMappingHandlerAdapter 实现类，专门为 @RequestMapping 注解服务的处理器的适配器
+9. ModelAndView 类
+10. ViewResolver 接口
+11. InternalViewResolver 类
+12. View 接口
+13. InternalViewResolver 类
+
+****
+## 2. 
 
 
 

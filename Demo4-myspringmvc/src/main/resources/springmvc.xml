@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<beans>
+    <!--组件扫描-->
+    <component-scan base-package="com.cell.springmvc.controller"/>
+    <!--视图解析器-->
+    <bean class="org.myspringmvc.web.servlet.view.InternalResourceViewResolver">
+        <property name="prefix" value="/WEB-INF/jsp/"/>
+        <property name="suffix" value=".jsp"/>
+    </bean>
+    <!--拦截器-->
+    <interceptors>
+        <bean class="com.cell.springmvc.interceptors.Interceptor1"/>
+        <bean class="com.cell.springmvc.interceptors.Interceptor2"/>
+    </interceptors>
+</beans>
