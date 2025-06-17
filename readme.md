@@ -2010,3 +2010,314 @@ public class DispatcherServlet extends FrameworkServlet {
 ```
 
 ****
+# 十一. SpringMVC 执行流程
+
+```java
+// 前端控制器，SpringMVC 最核心的类
+public class DispatcherServlet extends FrameworkServlet {
+    // 核心方法，用来处理请求，一次请求调用一次 doDispatch
+    protected void doDispatch(HttpServletRequest request, HttpServletResponse response) throws Exception {
+        // 根据请求对象 request 获取（processedRequest 就是 request）
+        // 这个对象是在每次发送请求时都创建一个，是请求级别的
+        // 该对象中描述了本次请求应该执行的拦截器是哪些，顺序是怎样的，要执行的处理器是哪个
+        HandlerExecutionChain mappedHandler = getHandler(processedRequest);
+
+        // 根据处理器获取处理器适配器（底层使用了适配器模式）
+        // HandlerAdapter在web服务器启动的时候就创建好了（启动时创建多个HandlerAdapter放在List集合中）
+        // HandlerAdapter有多种类型：
+        // RequestMappingHandlerAdapter：用于适配使用注解 @RequestMapping 标记的控制器方法
+        // SimpleControllerHandlerAdapter：用于适配实现了 Controller 接口的控制器
+        // 注意：此时还没有进行数据绑定（也就是说，表单提交的数据此时还没有转换为pojo对象）
+        HandlerAdapter ha = getHandlerAdapter(mappedHandler.getHandler()); // 从包装好的 mappedHandler 中获取 Controller 处理器
+
+        // 执行请求对应的所有拦截器中的 preHandle 方法
+        // 当 preHandle 中返回的是 false 时，后面的流程都不会执行，以此达到拦截的目的
+        if (!mappedHandler.applyPreHandle(processedRequest, response)) {
+            return;
+        }
+
+        // 通过处理器调用处理器方法
+        // 在调用处理器方法之前会进行数据绑定，将表单提交的数据绑定到处理器方法上（底层是通过WebDataBinder完成的）
+        // 在数据绑定的过程中会使用到消息转换器：HttpMessageConverter
+        // 结束后返回 ModelAndView 对象，此时还没进行视图解析，只是把逻辑视图的名称包装进 ModelAndView
+        mv = ha.handle(processedRequest, response, mappedHandler.getHandler());
+
+        //  执行请求对应的所有拦截器中的 postHandle 方法
+        mappedHandler.applyPostHandle(processedRequest, response, mv);
+
+        // 处理分发结果（在这个方法中完成响应结果到浏览器）
+        processDispatchResult(processedRequest, response, mappedHandler, mv, dispatchException);
+    }
+
+    // 根据每一次的请求对象来获取处理器执行链对象
+    protected HandlerExecutionChain getHandler(HttpServletRequest request) throws Exception {
+		if (this.handlerMappings != null) {
+            // HandlerMapping在服务器启动的时候就创建好了，放到了List集合中。HandlerMapping也有多种类型
+            // RequestMappingHandlerMapping：将 URL 映射到使用注解 @RequestMapping 标记的控制器方法的处理器。
+            // SimpleUrlHandlerMapping：将 URL 映射到处理器中指定的 URL 或 URL 模式的处理器。
+			for (HandlerMapping mapping : this.handlerMappings) {
+                // 重点：这是一次请求的开始，实际上是通过处理器映射器来获取的处理器执行链对象
+                // 底层实际上会通过 HandlerMapping 对象获取 HandlerMethod对象，将HandlerMethod 对象传递给 HandlerExecutionChain对象。
+                // 注意：HandlerMapping对象和HandlerMethod对象都是在服务器启动阶段创建的。
+                // RequestMappingHandlerMapping对象中有多个HandlerMethod对象。
+				HandlerExecutionChain handler = mapping.getHandler(request);
+				if (handler != null) {
+					return handler;
+				}
+			}
+		}
+		return null;
+	}
+    
+    private void processDispatchResult(HttpServletRequest request, HttpServletResponse response,
+			@Nullable HandlerExecutionChain mappedHandler, @Nullable ModelAndView mv,
+			@Nullable Exception exception) throws Exception {
+        // 渲染
+        render(mv, request, response);
+        // 渲染完毕后，调用该请求对应的所有拦截器的 afterCompletion 方法
+        mappedHandler.triggerAfterCompletion(request, response, null);
+    }
+
+    protected void render(ModelAndView mv, HttpServletRequest request, HttpServletResponse response) throws Exception {
+        // 通过视图解析器返回视图对象
+        view = resolveViewName(viewName, mv.getModelInternal(), locale, request);
+        // 调用视图对象的渲染方法(真正的渲染视图) 
+        view.render(mv.getModelInternal(), request, response);
+    }
+
+    protected View resolveViewName(String viewName, @Nullable Map<String, Object> model,
+			Locale locale, HttpServletRequest request) throws Exception {
+        // 创建视图解析器
+        ViewResolver viewResolver;
+        // 通过视图解析器返回视图对象
+        View view = viewResolver.resolveViewName(viewName, locale);
+	}
+}
+```
+
+```java
+// 视图解析器接口
+// 每一个接口下有对应的实现类，例如：ThymeleafViewResolver、InternalResourceViewResolver...
+public interface ViewResolver {
+    View resolveViewName(String viewName, Locale locale) throws Exception;
+}
+```
+
+```java
+// 视图接口
+// 每一个接口下有对应的实现类，例如：ThymeleafView、InternalResourceView...
+public interface View {
+    void render(@Nullable Map<String, ?> model, HttpServletRequest request, HttpServletResponse response)
+			throws Exception;
+}
+```
+
+## 1. 关于：HandlerExecutionChain mappedHandler = getHandler(processedRequest);
+
+1. HandlerExecutionChain：它是处理器执行链对象，表示一次请求由哪个控制器方法处理，并在它前后执行哪些拦截器
+
+2. HandlerExecutionChain 中的属性：
+
+```java
+public class HandlerExecutionChain {
+    // 这是处理器方法对象，底层对应的是一个 HandlerMethod 对象
+    private final Object handler; // 将来会执行 handler = new HandlerMethod(...)
+    // 该请求对应的所有拦截器按照顺序放到这个集合中
+    private final List<HandlerInterceptor> interceptorList;
+    // 拦截器集合中的下标
+    private int interceptorIndex;
+}
+```
+
+3. HandlerMethod 对象
+
+HandlerMethod 是最核心的要执行的目标，是对控制器方法的封装，它是在 web 服务器启动初始化 spring 容器的时候就创建好了，这个类当中比较重要的属性包括：beanName 和 Method
+
+```java
+@Controller("userController")
+public class UserController {
+    @RequestMapping("/login")
+    public String login(User user) {
+        return ...;
+    }
+}
+```
+
+@Controller 或 @RestController 中所有被 @RequestMapping（或派生注解）标注的方法，都会被 RequestMappingHandlerMapping 注册成映射路径，
+并将它们封装为一个个 HandlerMethod 对象缓存起来（用于请求匹配时返回）
+
+```java
+// 那么以上代码对应了一个HandlerMethod对象：
+public class HandlerMethod {
+    // 通过 beanName 找到控制器
+    private String beanName = "userController";
+    // 通过反射机制可以拿到对应的一个控制器方法
+    private Method loginMethod;
+}
+```
+
+4. getHandler(request):
+
+在 DispatcherServlet 类中处理请求的第一步是 HandlerExecutionChain mappedHandler = getHandler(processedRequest); 但其本质上是在 getHandler 方法中调用了
+mapping.getHandler(request); 通过这个方法从系统中已注册的所有 HandlerMapping 中找出当前请求该由哪个 Controller 方法来处理，
+并返回对应的 HandlerExecutionChain（执行链）
+
+```java
+@Nullable
+protected HandlerExecutionChain getHandler(HttpServletRequest request) throws Exception {
+    if (this.handlerMappings != null) {
+        // DispatcherServlet 持有多个 HandlerMapping 的实现类（按优先级排序）
+        Iterator var2 = this.handlerMappings.iterator();
+        while(var2.hasNext()) {
+            HandlerMapping mapping = (HandlerMapping)var2.next();
+            // 逐个调用 HandlerMapping 看谁能处理这个请求
+            HandlerExecutionChain handler = mapping.getHandler(request);
+            if (handler != null) {
+                return handler;
+            }
+        }
+    }
+    return null;
+}
+```
+
+HandlerMapping 是一个接口（处理映射器），专门负责映射的，也就是根据请求路径去映射处理器方法。这个接口有很多实现类，最常用的是 RequestMappingHandlerMapping，
+它是 @RequestMapping 注解专用的映射器，当处理器方法上使用了这个注解，那么底层就可以在 handlerMappings 集合中找到对应的这个映射器，把这个映射器交给 handler 对象。
+如果没有使用这个注解的话，底层会在集合中寻找其他对应的映射器，例如使用配置 xml 文件的方式来进行映射，就会使用 SimpleUrlHandlerMapping 映射器。
+
+```java
+// 这种方式会被 RequestMappingHandlerMapping 解析注册，映射路径为 /user/info
+@Controller
+@RequestMapping("/user")
+public class UserController {
+    @GetMapping("/info")
+    public String getUserInfo() {
+        return "info";
+    }
+}
+```
+
+HandlerMapping 对象也是在服务器启动时创建的，此时会从 Spring 容器中查找所有实现了 HandlerMapping 接口的 Bean，放入 DispatcherServlet 的 handlerMappings 成员变量中，并按照 @Order 或 Ordered 接口进行排序
+
+5. RequestMappingHandlerMapping 中的 getHandler(request); 方法
+
+RequestMappingHandlerMapping.getHandler(request) 方法会在运行时把当前请求路径 /xxx/yyy 解析匹配后，
+找到对应的 Controller 方法，然后会进入它的父类 AbstractHandlerMethodMapping，最终执行一个 createHandlerMethod() 方法封装为一个 HandlerMethod 对象，然后连同拦截器组装成 HandlerExecutionChain 返回
+
+```java
+public abstract class AbstractHandlerMethodMapping {
+    protected HandlerMethod createHandlerMethod(Object handler, Method method) {
+        if (handler instanceof String beanName) {
+            return new HandlerMethod(beanName, this.obtainApplicationContext().getAutowireCapableBeanFactory(), this.obtainApplicationContext(), method);
+        } else {
+            return new HandlerMethod(handler, method);
+        }
+    }
+}
+```
+
+****
+## 2. 关于 HandlerAdapter ha = getHandlerAdapter(mappedHandler.getHandler());
+
+在 Spring 的底层使用了适配器模式，每一个处理器（自己写的 Controller）都有对应的处理器适配器。因此在 SpringMVC 中处理器适配器也有很多个，常用的就是 RequestMappingHandlerAdapter，
+这个处理器适配器是专门处理带有 @RequestMapping 注解的方法。
+
+HandlerAdapter 是一个接口，在服务器启动阶段，所有该接口的实现类都会创建出来，放进 handlerAdapters 集合中，与 HandlerMapping 类似，通过这些接口对传进来的 HandlerMethod 对象选择合适的适配器，
+然后由该适配器负责调用目标方法，处理参数、执行方法并返回结果
+
+```java
+// handler 就是 HandlerMethod 对象（此时已完成封装）
+protected HandlerAdapter getHandlerAdapter(Object handler) throws ServletException {
+    if (this.handlerAdapters != null) {
+        Iterator var2 = this.handlerAdapters.iterator();
+        // 从 handlerAdapters 集合中获取对应的适配器
+        while(var2.hasNext()) {
+            HandlerAdapter adapter = (HandlerAdapter)var2.next();
+            if (adapter.supports(handler)) {
+                return adapter;
+            }
+        }
+    }
+    throw new ServletException("No adapter for handler [" + handler + "]: The DispatcherServlet configuration needs to include a HandlerAdapter that supports this handler");
+}
+```
+
+```text
+1.getHandler(request)
+    → 得到 HandlerExecutionChain，其中 handler 是 HandlerMethod
+
+2.getHandlerAdapter(handler)
+    → 得到 RequestMappingHandlerAdapter
+
+3.ha.handle(request, response, handler)
+    → 调用 Controller 方法，得到返回值（逻辑视图名）
+
+4.将返回值封装为 ModelAndView → 渲染视图
+```
+
+****
+## 3. 关于 mappedHandler.applyPreHandle(processedRequest, response)
+
+遍历拦截器集合，按顺序从 interceptorList 中取出每一个 HandlerInterceptor 对象
+
+```java
+public class HandlerExecutionChain {
+    boolean applyPreHandle(HttpServletRequest request, HttpServletResponse response) throws Exception {
+        for (int i = 0; i < this.interceptorList.size(); this.interceptorIndex = i++) {
+            HandlerInterceptor interceptor = (HandlerInterceptor) this.interceptorList.get(i);
+            if (!interceptor.preHandle(request, response, this.handler)) {
+                this.triggerAfterCompletion(request, response, (Exception) null);
+                return false;
+            }
+        }
+        return true;
+    }
+}
+```
+
+****
+## 4. 关于 mv = ha.handle(processedRequest, response, mappedHandler.getHandler());
+
+ha 是处理器适配器，mv 是 ModelAndView 对象，该方法是用来调用请求路径对应的 HandlerMethod(处理器方法)，当使用了 @RequestMapping 注解后，
+调用的就是 RequestMappingHandlerAdapter 的 handle 方法，最终会进入它的 invokeHandlerMethod 方法，绑定前端发送的数据
+
+```java
+protected ModelAndView invokeHandlerMethod(HttpServletRequest request,HttpServletResponse response,HandlerMethod handlerMethod) 
+        throws Exception {
+    // 获取一个数据绑定工厂
+    WebDataBinderFactory binderFactory = getDataBinderFactory(handlerMethod);
+    // 获取一个可调用的处理器方法
+    ServletInvocableHandlerMethod invocableMethod = createInvocableHandlerMethod(handlerMethod);
+    // 给可调用的方法绑定数据，
+    invocableMethod.setDataBinderFactory(binderFactory);
+    // 给可调用的方法设置参数
+    invocableMethod.setParameterNameDiscoverer(this.parameterNameDiscoverer);
+    // 可调用的方法执行了
+    invocableMethod.invokeAndHandle(webRequest, mavContainer);
+}
+```
+
+该方法中主要完成：将前端提交的 form 数据通过 HttpMessageConverter 绑定到 Controller 方法的参数上，然后通过反射调用目标方法（HandlerMethod），执行完成后，
+使用返回值处理器（HandlerMethodReturnValueHandler）将返回值封装为 ModelAndView 对象
+
+****
+## 5. 关于 mappedHandler.applyPostHandle(processedRequest, response, mv);
+
+从拦截器集合中逆序取出所有的拦截器对象，然后调用它们的 postHandle 方法，triggerAfterCompletion 方法同理，逆序取出再调用
+
+```java
+void applyPostHandle(HttpServletRequest request, HttpServletResponse response, @Nullable ModelAndView mv) throws Exception {
+    for(int i = this.interceptorList.size() - 1; i >= 0; --i) {
+        HandlerInterceptor interceptor = (HandlerInterceptor)this.interceptorList.get(i);
+        interceptor.postHandle(request, response, this.handler, mv);
+    }
+}
+```
+
+****
+
+
+
+
+
+
