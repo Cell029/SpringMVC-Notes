@@ -5,5 +5,7 @@
 </head>
 <body>
 <h1>手写Spring MVC框架</h1>
+<h1>${username}</h1>
+<a href="detail">订单详情页</a>
 </body>
 </html>

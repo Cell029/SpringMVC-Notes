@@ -6,11 +6,10 @@ import org.myspringmvc.web.bind.annotation.RequestMapping;
 import org.myspringmvc.web.bind.annotation.RequestMethod;
 
 @Controller
-public class UserController {
-    @RequestMapping(value ="/", method = RequestMethod.GET)
-    public String index(ModelMap modelMap) {
-        // 向 request 域存储数据
-        modelMap.addAttribute("username", "lisi");
-        return "index";
+public class OrderController {
+    @RequestMapping(value = "/detail", method = RequestMethod.GET)
+    public String detail(ModelMap modelMap) {
+        modelMap.addAttribute("orderNo", "123456789");
+        return "detail";
     }
 }

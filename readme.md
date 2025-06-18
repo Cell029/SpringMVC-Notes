@@ -1872,10 +1872,14 @@ Spring MVC 中的拦截器是基于 Java 的反射机制和 AOP 思想实现的�
 
 3. void afterCompletion()
 
-视图渲染完成后 执行（即请求完全处理完毕后），适合进行资源清理、日志记录、异常监控等收尾工作，无论是否抛出异常，都会执行（前提是 preHandle 返回 true）
+视图渲染完成后执行（即请求完全处理完毕后），适合进行资源清理、日志记录、异常监控等收尾工作，无论是否抛出异常，都会执行。
+当某个拦截器的 preHandle 方法返回 false 时，请求处理流程会被立即中断，后续的拦截器和处理器方法都不会执行。
+但此时，已经执行过 preHandle 的拦截器可能已经做了一些初始化或资源分配（例如打开数据库连接、记录日志等），这些资源需要被正确清理。
+此时就需要逆向调用已经执行过 preHandle 的拦截器的 afterCompletion 方法，确保资源被释放。
+因此，在 preHandle 方法返回 false 那个 if 语句中通常会调用本方法
 
 ```markdown
-preHandle → Controller → postHandle → 视图渲染 → afterCompletion
+ preHandle → Controller → postHandle → 视图渲染 → afterCompletion
 ```
 
 ### 2.1 基于 xml 文件配置
@@ -2473,7 +2477,110 @@ public class UserController {
 13. InternalViewResolver 类
 
 ****
-## 2. 
+## 2. 核心思路
 
+[HandlerMethod](./Demo4-myspringmvc/src/main/java/org/myspringmvc/web/method/HandlerMethod.java)类，它是用来封装处理器对象的，将 Controller 对象和对应的处理方法封装在一起，方便后续的处理和调用。
 
+[HandlerMapping](./Demo4-myspringmvc/src/main/java/org/myspringmvc/web/servlet/HandlerMapping.java)接口，它提供一个 getHandler 方法，让实现类实现这个方法来获取处理器执行链对象
 
+[RequestMappingHandlerMapping](./Demo4-myspringmvc/src/main/java/org/myspringmvc/web/servlet/mvc/method/annotation/RequestMappingHandlerMapping.java)映射器实现类，通过重写 getHandler 方法，
+实现 HandlerExecutionChain 对象的实例化与拦截器的设置（拦截器是执行链对象的属性），这里面封装了一个 map 集合，通过这个集合获取到对应的 HandlerMethod 对象，也就是此时 handler 变成了 handlerMethod
+
+[HandlerAdapter](./Demo4-myspringmvc/src/main/java/org/myspringmvc/web/servlet/HandlerAdapter.java)接口，提供一个 handle 方法，主要是让它的实现类返回一个 ModelAndView 对象
+
+[RequestMappingHandlerAdapter](./Demo4-myspringmvc/src/main/java/org/myspringmvc/web/servlet/mvc/method/annotation/RequestMappingHandlerAdapter.java)适配器实现类，
+通过传递来的 HandlerMethod 对象中获取里面封装的 Controller 对象和本次请求调用的具体的控制器方法（反射机制调用方法需要用到具体的类），然后通过反射机制执行控制器方法获取到它的返回值，
+然后将这个返回值作为逻辑视图名和一个 ModelMap 模型一起封装进 ModelAndView
+
+[View](./Demo4-myspringmvc/src/main/java/org/myspringmvc/web/servlet/View.java)接口，提供了一个 render 方法，让实现类重写该方法，让它们决定如何将数据和视图模板渲染输出到浏览器
+
+[InternalResourceView](./Demo4-myspringmvc/src/main/java/org/myspringmvc/web/servlet/view/InternalResourceView.java)类，主要负责把控制器返回的数据和视图名最终转换为实际的 JSP 页面响应结果，并返回给浏览器。
+它有两个成员变量，contentType 负责设置 response 将要响应给前端的数据类型，path 则是由逻辑视图转换成物理视图的要转发的 jsp 资源路径，这两个变量是在 InternalResourceViewResolver 类中被赋值的。
+然后会将 model 模型中的所有键值对全部存放进 request 域，所以 ModelAndView 的 ModeMap 的 addAttribute 方法只是暂时存储数据，最后存入 request 域是在这里执行的。执行完毕后便进行页面的跳转
+
+[ViewResolver](./Demo4-myspringmvc/src/main/java/org/myspringmvc/web/servlet/ViewResolver.java)接口，提供 resolveViewName 方法，让实现类决定如何解析逻辑视图
+
+[InternalResourceViewResolver](./Demo4-myspringmvc/src/main/java/org/myspringmvc/web/servlet/view/InternalResourceViewResolver.java)实现类，
+在服务器启动阶段获取 web.xml 中配置的前后缀，然后接收 RequestMappingHandlerAdapter#handle 从 HandlerMethod 对象中获取的逻辑视图，进行拼接，设置 contentType，
+让这两个作为参数进行 InternalResourceView 的实例化，所以这个方法是完成视图的跳转与存储数据到 request 域的前提
+
+[DispatcherServlet](./Demo4-myspringmvc/src/main/java/org/myspringmvc/web/servlet/DispatcherServlet.java)类，这里有两个核心的方法，一个是关键属性的初始化，一个是主要的处理请求的方法。
+
+[HandlerExecutionChain](./Demo4-myspringmvc/src/main/java/org/myspringmvc/web/servlet/HandlerExecutionChain.java)类，这个类主要是集中封装处理器（handler）和拦截器（interceptor），
+
+[HandlerInterceptor](./Demo4-myspringmvc/src/main/java/org/myspringmvc/web/servlet/HandlerInterceptor.java)接口，提供三个拦截方法
+
+ModelMap类，定义的一个模型，用于暂存需要存放进 request 域中的数据
+
+[ModelAndView](./Demo4-myspringmvc/src/main/java/org/myspringmvc/web/servlet/ModelAndView.java)类，封装一个 ModelMap 模型和视图对象（也可以是视图名）。
+mv.setViewName("login"); 就相当于 setView("login")，是一个视图名；mv.setView(new InternalResourceView("text/html;charset=utf-8", "/WEB-INF/jsp/login.jsp")); 就是一个视图对象，不需要视图解析器转换，视图对象可以自己完成渲染。
+
+[WebApplicationContext](./Demo4-myspringmvc/src/main/java/org/myspringmvc/context/WebApplicationContext.java)，专属于 Web 服务的上下文对象，继承 ApplicationContext，
+可以保存当前 Web 环境的上下文 ServletContext，以供后续使用，也可以复用已有的 IoC（控制反转）容器能力
+
+[ApplicationContext](./Demo4-myspringmvc/src/main/java/org/myspringmvc/context/ApplicationContext.java)类，完成 Web 服务启动时关键组件的初始化
+
+****
+## 3. 整体流程
+
+```text
+服务器启动 
+    ↓
+Servlet 容器启动（Tomcat启动） 
+    ↓
+加载 web.xml，创建 DispatcherServlet 实例（由 Tomcat 执行） 
+    ↓
+DispatcherServlet.init() 触发 
+    ↓
+创建 WebApplicationContext
+    → WebApplicationContext 继承 ApplicationContext，负责扫描、加载 Bean 定义
+    → 扫描配置类，实例化 Controller、HandlerMapping、HandlerAdapter、ViewResolver 等组件
+    → 处理依赖注入，完成 IoC 容器初始化（在 ApplicationContext 中体现）
+    → 将 ServletContext 绑定进 WebApplicationContext，方便后续使用
+        ↓
+DispatcherServlet 初始化关键组件
+    → 获取 HandlerMapping 实现（如 RequestMappingHandlerMapping，通过 IoC 容器管理，调用 getBean 方法，传入对应的 key）
+    → 获取 HandlerAdapter 实现（如 RequestMappingHandlerAdapter）
+    → 获取 ViewResolver 实现（如 InternalResourceViewResolver）
+    → 初始化拦截器链（HandlerInterceptor）
+    → 读取配置（比如 JSP 路径前后缀、contentType）
+        ↓
+初始化完成，DispatcherServlet 进入等待请求状态
+```
+
+```text
+客户端请求 
+    ↓
+DispatcherServlet#doDispatch(request, response) 
+    ↓
+调用 HandlerMapping#getHandler(request)
+    → RequestMappingHandlerMapping 通过请求路径查找对应 HandlerMethod
+    → 封装 HandlerExecutionChain（handler + 拦截器列表）
+        ↓
+调用 HandlerExecutionChain.applyPreHandle()
+    → 遍历所有拦截器 preHandle 方法
+    → 若返回 false，终止请求，响应客户端（如果这个方法里有写对应的跳转就在这完成跳转）
+        ↓
+调用 HandlerAdapter.handle(request, response, handler)
+    → RequestMappingHandlerAdapter 获取 Controller 和方法
+    → 利用反射调用 Controller 方法
+    → 获取返回值封装为 ModelAndView
+        ↓
+调用 HandlerExecutionChain.applyPostHandle()
+    → 遍历拦截器 postHandle
+        ↓
+调用 ViewResolver.resolveViewName(viewName, locale)
+    → InternalResourceViewResolver 根据配置拼接视图路径，创建 InternalResourceView
+        ↓
+调用 View.render(model, request, response)
+    → 将模型数据放入 request 域
+    → 设置响应 contentType
+    → 请求转发至 JSP 进行渲染
+        ↓
+调用 HandlerExecutionChain.triggerAfterCompletion()
+    → 拦截器 afterCompletion 回调，进行清理操作
+        ↓
+响应返回给客户端
+```
+
+****

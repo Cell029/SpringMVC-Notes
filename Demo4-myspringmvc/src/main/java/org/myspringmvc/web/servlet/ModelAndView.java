@@ -22,9 +22,8 @@ public class ModelAndView {
         this.view = view;
     }
 
-    // 该方法待实现
     public void setViewName(String viewName){
-        // TODO
+        setView(viewName);
     }
 
     public ModelMap getModel() {

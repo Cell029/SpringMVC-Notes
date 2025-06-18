@@ -6,7 +6,7 @@ import java.util.Map;
 
 public interface View {
     // 获取响应的内容类型
-    String getContentType();
+    // String getContentType();
     // 渲染
     void render(Map<String, ?> model, HttpServletRequest request, HttpServletResponse response) throws Exception;
 }
