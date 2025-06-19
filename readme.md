@@ -2584,3 +2584,33 @@ DispatcherServlet#doDispatch(request, response)
 ```
 
 ****
+# 十三. 全注解开发
+
+## 1. web.xml 文件的替代
+
+在 Servlet 3.0 版本，就可以不写 web.xml 文件进行配置了，新规范中提供了一个接口 ServletContainerInitializer，服务器在启动的时候会自动从容器中找它的实现类，
+并自动调用它的 `onStartup` 方法来完成 Servlet 上下文的初始化
+
+基于新特性，可以编写一个 [WebAppInitializer](./) 继承 AbstractAnnotationConfigDispatcherServletInitializer（常用的实现类）来代替 web.xml 文件
+
+****
+# 十四. SSM 整合
+
+## 1. Spring 整合 Mybatis
+
+- 第一步：编写 jdbc.properties，配置连接数据库的信息
+- 第二步：编写 [DataSourceConfig](./Demo5-annotation/src/main/java/com/cell/ssm/config/DataSourceConfig.java)，配置数据源信息
+- 第三步：编写 [MyBatisConfig](./Demo5-annotation/src/main/java/com/cell/ssm/config/MyBatisConfig.java)，使用纯注解方式（无 XML）完成 MyBatis 与 Spring 的集成配置，当于用 Java 代码替代了传统的 mybatis-config.xml 和 <mapper-scan> 配置
+- 第四步：编写 [SpringConfig](./Demo5-annotation/src/main/java/com/cell/ssm/config/SpringConfig.java)，这类配置负责启动组件扫描、加载外部配置文件，并整合其他 Java 配置类，最终构成一个完整的业务层 Spring 容器
+
+****
+## 2. Spring 整合 SpringMVC
+
+- 第一步：编写 [WebAppInitializer](./Demo5-annotation/src/main/java/com/cell/ssm/config/WebAppInitializer.java)（web.xml），替代传统的 web.xml，实现 Web 容器启动配置
+- 第二步：编写 [SpringMvcConfig](./Demo5-annotation/src/main/java/com/cell/ssm/config/SpringMvcConfig.java)，相当于 springmvc.xml 文件
+
+****
+
+
+
+
